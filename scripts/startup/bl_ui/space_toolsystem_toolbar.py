@@ -3804,6 +3804,48 @@ class NODE_PT_tools_active(ToolSelectPanelHelper, Panel):
     }
 
 
+class _defs_cad_sketch:
+    """SimpleCAD sketch mode tools. Clicking in the viewport starts the tool's operator."""
+
+    @staticmethod
+    def _draw_tool(idname, label, description, icon, operator):
+        return ToolDef.from_dict(dict(
+            idname=idname,
+            label=label,
+            description=description,
+            icon=icon,
+            keymap=(
+                (operator, {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
+            ),
+        ))
+
+    select = ToolDef.from_dict(dict(
+        idname="cad.sketch_select",
+        label="Select",
+        description="Click to select sketch geometry, drag to move it (constraints keep holding)",
+        icon="ops.generic.select",
+        # Click and drag come from the "CAD Sketch" keymap.
+        keymap=(),
+    ))
+
+    line = _draw_tool.__func__(
+        "cad.sketch_line", "Line", "Draw connected lines; click the first point to close the loop",
+        "ops.gpencil.primitive_polyline", "cad.sketch_line")
+    rectangle = _draw_tool.__func__(
+        "cad.sketch_rectangle", "Rectangle", "Draw a rectangle from two corners",
+        "ops.gpencil.primitive_box", "cad.sketch_rectangle")
+    circle = _draw_tool.__func__(
+        "cad.sketch_circle", "Circle", "Draw a circle from its center and a point on it",
+        "ops.gpencil.primitive_circle", "cad.sketch_circle")
+    arc = _draw_tool.__func__(
+        "cad.sketch_arc", "Arc", "Draw an arc from its center, start and end",
+        "ops.gpencil.primitive_arc", "cad.sketch_arc")
+    dimension = _draw_tool.__func__(
+        "cad.sketch_dimension", "Dimension",
+        "Click a line, circle or arc, or two elements, to add a dimension",
+        "ops.view3d.ruler", "cad.sketch_dimension")
+
+
 class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOLS'
@@ -4092,6 +4134,16 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             None,
             *_tools_annotate,
             _defs_view3d_generic.ruler,
+        ],
+        'EDIT_CAD': [
+            _defs_cad_sketch.select,
+            None,
+            _defs_cad_sketch.line,
+            _defs_cad_sketch.rectangle,
+            _defs_cad_sketch.circle,
+            _defs_cad_sketch.arc,
+            None,
+            _defs_cad_sketch.dimension,
         ],
         'PARTICLE': [
             *_tools_select,

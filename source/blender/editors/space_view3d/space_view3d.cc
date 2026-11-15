@@ -407,6 +407,10 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
   keymap = WM_keymap_ensure(wm->runtime->defaultconf, "Point Cloud", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
 
+  /* SimpleCAD: CAD part sketch mode (the keymap's poll checks for sketch mode). */
+  keymap = WM_keymap_ensure(wm->runtime->defaultconf, "CAD Sketch", SPACE_EMPTY, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
+
   keymap = WM_keymap_ensure(
       wm->runtime->defaultconf, "Sculpt Curves", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
@@ -1249,6 +1253,9 @@ std::array<const char *, 4> ED_view3d_buttons_contexts(const bContext *C)
       break;
     case CTX_MODE_EDIT_POINTCLOUD:
       ARRAY_SET_ITEMS(contexts, ".pointcloud_edit");
+      break;
+    case CTX_MODE_EDIT_CAD:
+      ARRAY_SET_ITEMS(contexts, ".cad_edit");
       break;
     case CTX_MODE_POSE:
       ARRAY_SET_ITEMS(contexts, ".posemode");

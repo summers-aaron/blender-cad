@@ -400,6 +400,13 @@ void BKE_cad_data_update(Depsgraph *depsgraph, Scene *scene, Object *object)
   bke::GeometrySet geometry_set;
 
 #ifdef WITH_CAD
+  /* Solve sketches on the evaluated copy, so animated or driven dimensions take effect. The
+   * original is solved when it is edited; this is a no-op for unchanged values. */
+  for (CADFeature &feature : part->features) {
+    if (feature.sketch && feature.sketch->constraints_num > 0) {
+      BKE_cad_sketch_solve(part, feature.sketch);
+    }
+  }
   const cad::Document doc = document_from_dna(*part);
   auto result = std::make_shared<cad::EvalResult>(cad::evaluate(doc));
 

@@ -141,6 +141,7 @@ void ED_spacetypes_init()
   ED_gizmotypes_cage_2d();
   ED_gizmotypes_cage_3d();
   ED_gizmotypes_snap_3d();
+  ed::cad::gizmotypes_cad();
 
   /* Register types for operators and gizmos. */
   for (const std::unique_ptr<SpaceType> &type : BKE_spacetypes_list()) {
@@ -202,6 +203,7 @@ void ED_spacetypes_keymap(wmKeyConfig *keyconf)
   ED_keymap_curve(keyconf);
   curves::keymap_curves(keyconf);
   pointcloud::keymap_pointcloud(keyconf);
+  ed::cad::keymap_cad(keyconf);
   ED_keymap_armature(keyconf);
   ED_keymap_physics(keyconf);
   ED_keymap_metaball(keyconf);

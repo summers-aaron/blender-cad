@@ -157,8 +157,10 @@ enum eContextObjectMode {
   CTX_MODE_SCULPT_GREASE_PENCIL,
   CTX_MODE_WEIGHT_GREASE_PENCIL,
   CTX_MODE_VERTEX_GREASE_PENCIL,
+  /** SimpleCAD: sketch editing of a CAD part (appended: tool settings store mode values). */
+  CTX_MODE_EDIT_CAD,
 };
-#define CTX_MODE_NUM (CTX_MODE_VERTEX_GREASE_PENCIL + 1)
+#define CTX_MODE_NUM (CTX_MODE_EDIT_CAD + 1)
 
 /* Context */
 

@@ -262,6 +262,7 @@ set(SRC
   intern/pointcloud.cc
   intern/cad.cc
   intern/cad_eval.cc
+  intern/cad_sketch.cc
   intern/pointcloud_attributes.cc
   intern/pose_backup.cc
   intern/preferences.cc

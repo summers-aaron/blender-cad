@@ -97,6 +97,7 @@ class DATA_PT_cad_features(DataButtonsPanel, Panel):
 
         col = row.column(align=True)
         col.operator_menu_enum("cad.feature_add", "type", icon='ADD', text="")
+        col.operator_menu_enum("cad.sketch_add", "plane", icon='GREASEPENCIL', text="")
         col.operator("cad.feature_delete", icon='REMOVE', text="")
         col.separator()
         col.operator("cad.feature_move", icon='TRIA_UP', text="").direction = 'UP'
@@ -153,6 +154,13 @@ class DATA_PT_cad_feature(DataButtonsPanel, Panel):
             col = layout.column(align=True)
             col.label(text="{:d} points, {:d} curves, {:d} constraints".format(
                 len(sketch.points), len(sketch.curves), len(sketch.constraints)))
+            if sketch.dof >= 0:
+                col.label(text="Fully constrained" if sketch.dof == 0 else
+                          "{:d} degrees of freedom".format(sketch.dof))
+            if part.edit_sketch != feature:
+                props = layout.operator("cad.sketch_edit", text="Edit Sketch", icon='GREASEPENCIL')
+                props.feature_uid = feature.uid
+                props.look_at = True
 
         if feature.type in {'FILLET', 'CHAMFER'}:
             row = layout.row()

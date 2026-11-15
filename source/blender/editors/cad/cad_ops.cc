@@ -38,6 +38,7 @@
 #include "ED_cad.hh"
 
 #include "cad_intern.hh"
+#include "cad_sketch.hh"
 
 namespace blender::ed::cad {
 
@@ -128,7 +129,7 @@ static bool topo_name_uses_feature(const StringRef name, const int uid)
 }
 
 /** Features after `feature` that use its sketch or its topology. */
-static Vector<const CADFeature *> feature_dependents(const CADPart *part,
+static Vector<const CADFeature *> feature_dependents(const CADPart * /*part*/,
                                                     const CADFeature *feature)
 {
   Vector<const CADFeature *> dependents;
@@ -145,6 +146,17 @@ static Vector<const CADFeature *> feature_dependents(const CADPart *part,
   return dependents;
 }
 
+void feature_insert_at_rollback(CADPart *part, CADFeature *feature)
+{
+  CADFeature *marker = BKE_cad_feature_find(part, part->rollback_uid);
+  if (marker == nullptr || marker == feature) {
+    return;
+  }
+  BLI_remlink(&part->features, feature);
+  BLI_insertlinkafter(&part->features, marker, feature);
+  part->rollback_uid = feature->uid;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -158,14 +170,7 @@ static wmOperatorStatus feature_add_exec(bContext *C, wmOperator *op)
   const CADFeature *prev_active = BKE_cad_feature_active(part);
 
   CADFeature *feature = BKE_cad_feature_add(part, type);
-
-  /* With the rollback marker in the timeline, insert at the marker and move it forward, so the
-   * new feature is built on the model as it is shown. */
-  if (CADFeature *marker = BKE_cad_feature_find(part, part->rollback_uid)) {
-    BLI_remlink(&part->features, feature);
-    BLI_insertlinkafter(&part->features, marker, feature);
-    part->rollback_uid = feature->uid;
-  }
+  feature_insert_at_rollback(part, feature);
 
   if (type == CAD_FEATURE_EXTRUDE) {
     /* Extrude the active sketch, else the closest sketch before it. */
@@ -482,6 +487,34 @@ void operatortypes_cad()
   WM_operatortype_append(CAD_OT_rollback_set);
   WM_operatortype_append(CAD_OT_reference_toggle);
   WM_operatortype_append(CAD_OT_references_pick);
+
+  WM_operatortype_append(CAD_OT_sketch_add);
+  WM_operatortype_append(CAD_OT_sketch_edit);
+  WM_operatortype_append(CAD_OT_sketch_finish);
+  WM_operatortype_append(CAD_OT_sketch_select);
+  WM_operatortype_append(CAD_OT_sketch_select_all);
+  WM_operatortype_append(CAD_OT_sketch_drag);
+  WM_operatortype_append(CAD_OT_sketch_delete);
+  WM_operatortype_append(CAD_OT_sketch_line);
+  WM_operatortype_append(CAD_OT_sketch_rectangle);
+  WM_operatortype_append(CAD_OT_sketch_circle);
+  WM_operatortype_append(CAD_OT_sketch_arc);
+  WM_operatortype_append(CAD_OT_sketch_constrain);
+  WM_operatortype_append(CAD_OT_sketch_dimension);
+  WM_operatortype_append(CAD_OT_sketch_dimension_edit);
+  WM_operatortype_append(CAD_OT_sketch_construction_toggle);
+
+  sketch_draw_init();
+}
+
+void keymap_cad(wmKeyConfig *keyconf)
+{
+  sketch_keymap(keyconf);
+}
+
+void gizmotypes_cad()
+{
+  sketch_gizmos_register();
 }
 
 }  // namespace blender::ed::cad

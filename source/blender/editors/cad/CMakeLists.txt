@@ -16,8 +16,13 @@ set(INC_SYS
 set(SRC
   cad_ops.cc
   cad_pick.cc
+  cad_sketch_draw.cc
+  cad_sketch_edit.cc
+  cad_sketch_tools.cc
+  cad_sketch_undo.cc
 
   cad_intern.hh
+  cad_sketch.hh
 )
 
 set(LIB
@@ -27,6 +32,7 @@ set(LIB
   PRIVATE bf::dna
   PRIVATE bf::gpu
   PRIVATE bf::blentranslation
+  PRIVATE bf::blenfont
   PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::windowmanager

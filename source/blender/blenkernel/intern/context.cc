@@ -1434,6 +1434,8 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
         return CTX_MODE_EDIT_GREASE_PENCIL;
       case OB_POINTCLOUD:
         return CTX_MODE_EDIT_POINTCLOUD;
+      case OB_CAD:
+        return CTX_MODE_EDIT_CAD;
       default:
         break;
     }
@@ -1531,6 +1533,7 @@ static const char *data_mode_strings[] = {
     "grease_pencil_sculpt",
     "grease_pencil_weight",
     "grease_pencil_vertex",
+    "cad_edit",
     nullptr,
 };
 BLI_STATIC_ASSERT(ARRAY_SIZE(data_mode_strings) == CTX_MODE_NUM + 1,

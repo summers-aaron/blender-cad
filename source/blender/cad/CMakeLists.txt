@@ -15,15 +15,18 @@ set(INC_SYS
 set(SRC
   intern/eval.cc
   intern/profile.cc
+  intern/sketch_solver_planegcs.cc
 
   CAD_document.hh
   CAD_eval.hh
+  CAD_sketch_solver.hh
 )
 
 set(LIB
   PUBLIC bf::intern::cad_kernel
   PRIVATE bf::blenlib
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::extern::planegcs
 )
 
 blender_add_lib(bf_cad "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
@@ -35,6 +38,7 @@ if(WITH_GTESTS)
   set(TEST_SRC
     tests/cad_eval_test.cc
     tests/cad_profile_test.cc
+    tests/cad_sketch_solver_test.cc
   )
   set(TEST_LIB
     bf_cad

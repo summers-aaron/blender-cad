@@ -19,6 +19,7 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_listbase_iterator.hh"
+#include "BLI_set.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_string_utils.hh"
@@ -94,6 +95,16 @@ static void sketch_free(CADSketch *sketch)
   MEM_SAFE_DELETE(sketch->curves);
   MEM_SAFE_DELETE(sketch->constraints);
   MEM_delete(sketch);
+}
+
+CADSketch *BKE_cad_sketch_copy(const CADSketch *sketch)
+{
+  return sketch_copy(sketch);
+}
+
+void BKE_cad_sketch_free(CADSketch *sketch)
+{
+  sketch_free(sketch);
 }
 
 static CADFeature *feature_copy(const CADFeature *src, const int flag)
@@ -656,6 +667,165 @@ CADSketchPoint *BKE_cad_sketch_point_find(const CADSketch *sketch, const int uid
     }
   }
   return nullptr;
+}
+
+CADSketchCurve *BKE_cad_sketch_curve_find(const CADSketch *sketch, const int uid)
+{
+  for (int i = 0; i < sketch->curves_num; i++) {
+    if (sketch->curves[i].uid == uid) {
+      return &sketch->curves[i];
+    }
+  }
+  return nullptr;
+}
+
+CADSketchConstraint *BKE_cad_sketch_constraint_find(const CADSketch *sketch, const int uid)
+{
+  for (int i = 0; i < sketch->constraints_num; i++) {
+    if (sketch->constraints[i].uid == uid) {
+      return &sketch->constraints[i];
+    }
+  }
+  return nullptr;
+}
+
+bool BKE_cad_sketch_point_is_used(const CADSketch *sketch, const int point_uid)
+{
+  for (int i = 0; i < sketch->curves_num; i++) {
+    const int *p = sketch->curves[i].points;
+    if (p[0] == point_uid || p[1] == point_uid || p[2] == point_uid) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Keeps the elements for which `keep` is true, preserving order. */
+template<typename T, typename Fn>
+static bool array_filter(T *&array, int &num, const Fn &keep)
+{
+  int kept = 0;
+  for (int i = 0; i < num; i++) {
+    if (keep(array[i])) {
+      if (kept != i) {
+        array[kept] = array[i];
+      }
+      kept++;
+    }
+    else if constexpr (std::is_same_v<T, CADSketchConstraint>) {
+      MEM_SAFE_DELETE(array[i].expression);
+    }
+  }
+  const bool changed = kept != num;
+  num = kept;
+  if (num == 0) {
+    MEM_SAFE_DELETE(array);
+  }
+  return changed;
+}
+
+static bool sketch_remove(CADSketch *sketch, const Set<int> &uids_in)
+{
+  Set<int> removed = uids_in;
+  /* Curves that are removed or use a removed point. */
+  Set<int> curve_points;
+  for (int i = 0; i < sketch->curves_num; i++) {
+    const CADSketchCurve &c = sketch->curves[i];
+    bool remove = removed.contains(c.uid);
+    for (const int p : c.points) {
+      remove |= p >= 0 && removed.contains(p);
+    }
+    if (remove) {
+      removed.add(c.uid);
+      for (const int p : c.points) {
+        if (p >= 0) {
+          curve_points.add(p);
+        }
+      }
+    }
+  }
+  /* Points only the removed curves used. */
+  for (const int p : curve_points) {
+    bool used = false;
+    for (int i = 0; i < sketch->curves_num && !used; i++) {
+      const CADSketchCurve &c = sketch->curves[i];
+      if (removed.contains(c.uid)) {
+        continue;
+      }
+      used = c.points[0] == p || c.points[1] == p || c.points[2] == p;
+    }
+    if (!used) {
+      removed.add(p);
+    }
+  }
+  bool changed = false;
+  changed |= array_filter(sketch->curves, sketch->curves_num, [&](const CADSketchCurve &c) {
+    return !removed.contains(c.uid);
+  });
+  changed |= array_filter(sketch->points, sketch->points_num, [&](const CADSketchPoint &p) {
+    return !removed.contains(p.uid);
+  });
+  changed |= array_filter(
+      sketch->constraints, sketch->constraints_num, [&](const CADSketchConstraint &c) {
+        if (removed.contains(c.uid)) {
+          return false;
+        }
+        for (const int e : c.entities) {
+          if (e >= 0 && removed.contains(e)) {
+            return false;
+          }
+        }
+        return true;
+      });
+  return changed;
+}
+
+bool BKE_cad_sketch_remove(CADSketch *sketch, const Span<int> uids)
+{
+  Set<int> set;
+  set.add_multiple(uids);
+  return sketch_remove(sketch, set);
+}
+
+bool BKE_cad_sketch_remove_selected(CADSketch *sketch)
+{
+  Set<int> selected;
+  for (int i = 0; i < sketch->points_num; i++) {
+    if (sketch->points[i].flag & CAD_SKETCH_SELECT) {
+      selected.add(sketch->points[i].uid);
+    }
+  }
+  for (int i = 0; i < sketch->curves_num; i++) {
+    if (sketch->curves[i].flag & CAD_SKETCH_SELECT) {
+      selected.add(sketch->curves[i].uid);
+    }
+  }
+  for (int i = 0; i < sketch->constraints_num; i++) {
+    if (sketch->constraints[i].flag & CAD_CONSTRAINT_SELECT) {
+      selected.add(sketch->constraints[i].uid);
+    }
+  }
+  return !selected.is_empty() && sketch_remove(sketch, selected);
+}
+
+bool BKE_cad_sketch_select_all(CADSketch *sketch, const bool select)
+{
+  bool changed = false;
+  auto set = [&](auto &flag, const int bit) {
+    const auto old = flag;
+    SET_FLAG_FROM_TEST(flag, select, bit);
+    changed |= old != flag;
+  };
+  for (int i = 0; i < sketch->points_num; i++) {
+    set(sketch->points[i].flag, CAD_SKETCH_SELECT);
+  }
+  for (int i = 0; i < sketch->curves_num; i++) {
+    set(sketch->curves[i].flag, CAD_SKETCH_SELECT);
+  }
+  for (int i = 0; i < sketch->constraints_num; i++) {
+    set(sketch->constraints[i].flag, CAD_CONSTRAINT_SELECT);
+  }
+  return changed;
 }
 
 int BKE_cad_sketch_point_add(CADPart *part, CADSketch *sketch, const double2 &co)

@@ -18,6 +18,8 @@ namespace blender {
 
 struct ARegion;
 struct bContext;
+struct CADFeature;
+struct CADPart;
 struct Depsgraph;
 struct Object;
 struct View3D;
@@ -61,6 +63,10 @@ void draw_edge_highlights(const ARegion *region,
                           const Object *ob_eval,
                           Span<std::string> selected_names,
                           const TopoPick *hover);
+
+/** After #BKE_cad_feature_add: with a rollback marker, move the feature to the marker and the
+ * marker to the feature, so it is built on the model as it is shown. */
+void feature_insert_at_rollback(CADPart *part, CADFeature *feature);
 
 void CAD_OT_reference_toggle(wmOperatorType *ot);
 void CAD_OT_references_pick(wmOperatorType *ot);

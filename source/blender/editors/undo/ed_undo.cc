@@ -11,6 +11,7 @@
 
 #include "CLG_log.h"
 
+#include "DNA_cad_types.h"
 #include "DNA_key_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -383,6 +384,18 @@ void ED_undo_redo(bContext *C)
 }
 
 /**
+ * Like #BKE_object_data_is_in_editmode without an object, but also knows CAD parts in sketch mode,
+ * which edit their original data (the object is needed for that in general).
+ */
+static bool undo_obdata_is_in_editmode(const ID *id)
+{
+  if (GS(id->name) == ID_CAD) {
+    return (reinterpret_cast<const CADPart *>(id)->flag & CAD_PART_SKETCH_EDITING) != 0;
+  }
+  return BKE_object_data_is_in_editmode(nullptr, id);
+}
+
+/**
  * Check if any ID was modified (requiring a global undo step),
  * setting `modified` as true and exiting as early as possible.
  *
@@ -434,7 +447,7 @@ static void ed_undo_push_check_id_changes_fn(TaskPool *__restrict pool, void *ta
        * as the #OB_DATA_SUPPORT_EDITMODE below. */
       const ID *key_from = reinterpret_cast<const ID *>(reinterpret_cast<const Key *>(id)->from);
       if (key_from && OB_DATA_SUPPORT_EDITMODE(GS(key_from->name)) &&
-          BKE_object_data_is_in_editmode(nullptr, key_from))
+          undo_obdata_is_in_editmode(key_from))
       {
         continue;
       }
@@ -450,7 +463,7 @@ static void ed_undo_push_check_id_changes_fn(TaskPool *__restrict pool, void *ta
 
       /* Skip data in edit-mode: changes are stored by the modes own undo system and
        * practically all edit-mode operations tag the data being edited. */
-      if (BKE_object_data_is_in_editmode(nullptr, id)) {
+      if (undo_obdata_is_in_editmode(id)) {
         continue;
       }
       modified.store(true); /* Breaks. */
@@ -662,7 +675,7 @@ std::optional<UndoEncodeHints> ED_undo_is_legacy_compatible_for_property(bContex
                                         /* Only object-data that stores it's own edit-mode
                                          * data tracks it's own undo steps.
                                          * So passing object as null is OK here. */
-                                        BKE_object_data_is_in_editmode(nullptr, id));
+                                        undo_obdata_is_in_editmode(id));
 
         if (is_id_in_editmode == false) {
           bool skip_undo = true;

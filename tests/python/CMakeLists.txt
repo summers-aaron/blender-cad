@@ -555,6 +555,10 @@ if(WITH_CAD)
       --python ${CMAKE_CURRENT_LIST_DIR}/cad_part_basic.py -- ${_kernel}
     )
     # Checks that operators report errors (e.g. invalid moves), so allow error reports.
+    add_blender_test(
+      cad_sketch_solve_${_kernel}
+      --python ${CMAKE_CURRENT_LIST_DIR}/cad_sketch_solve.py -- ${_kernel}
+    )
     add_blender_test_allow_error(
       cad_part_ops_${_kernel}
       --python ${CMAKE_CURRENT_LIST_DIR}/cad_part_ops.py -- ${_kernel}
@@ -580,6 +584,17 @@ if(WITH_CAD)
       )
       set_tests_properties(cad_gui_pick_${_kernel} PROPERTIES
         PASS_REGULAR_EXPRESSION "ALL OK \\(GUI pick\\)"
+      )
+      add_test(
+        NAME cad_gui_sketch_${_kernel}
+        COMMAND ${CMAKE_COMMAND} -E env --unset=WAYLAND_DISPLAY
+                ${XVFB_RUN_BIN} -a -s "-screen 0 1920x1080x24"
+                ${TEST_BLENDER_EXE} --factory-startup --enable-event-simulate
+                --window-geometry 0 0 1920 1080
+                --python ${CMAKE_CURRENT_LIST_DIR}/cad_gui_sketch.py -- ${_kernel}
+      )
+      set_tests_properties(cad_gui_sketch_${_kernel} PROPERTIES
+        PASS_REGULAR_EXPRESSION "ALL OK \\(GUI sketch\\)"
       )
     endforeach()
   endif()

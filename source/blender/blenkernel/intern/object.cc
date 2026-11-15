@@ -1921,6 +1921,7 @@ bool BKE_object_is_in_editmode(const Object *ob)
     case OB_CURVES:
     case OB_POINTCLOUD:
     case OB_GREASE_PENCIL:
+    case OB_CAD:
       return ob->mode == OB_MODE_EDIT;
     default:
       return false;
@@ -1951,6 +1952,7 @@ bool BKE_object_data_is_in_editmode(const Object *ob, const ID *id)
     case ID_CV:
     case ID_PT:
     case ID_GP:
+    case ID_CAD:
       if (ob) {
         return BKE_object_is_in_editmode(ob);
       }

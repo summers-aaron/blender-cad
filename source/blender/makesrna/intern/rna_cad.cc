@@ -189,6 +189,35 @@ static PointerRNA rna_CADPart_rollback_feature_get(PointerRNA *ptr)
   return rna_CADPart_feature_pointer(ptr, rna_cad_part(ptr)->rollback_uid);
 }
 
+static PointerRNA rna_CADPart_edit_sketch_get(PointerRNA *ptr)
+{
+  return rna_CADPart_feature_pointer(ptr, rna_cad_part(ptr)->edit_sketch_uid);
+}
+
+static float rna_CADSketchConstraint_length_get(PointerRNA *ptr)
+{
+  return float(std::abs(ptr->data_as<CADSketchConstraint>()->value));
+}
+
+static void rna_CADSketchConstraint_length_set(PointerRNA *ptr, const float value)
+{
+  CADSketchConstraint *c = ptr->data_as<CADSketchConstraint>();
+  /* Signed offsets keep their direction. */
+  c->value = (c->value < 0.0 && ELEM(c->type, CAD_CONSTRAINT_DISTANCE_X, CAD_CONSTRAINT_DISTANCE_Y)) ?
+                 -double(value) :
+                 double(value);
+}
+
+static float rna_CADSketchConstraint_angle_get(PointerRNA *ptr)
+{
+  return float(ptr->data_as<CADSketchConstraint>()->value);
+}
+
+static void rna_CADSketchConstraint_angle_set(PointerRNA *ptr, const float value)
+{
+  ptr->data_as<CADSketchConstraint>()->value = double(value);
+}
+
 static void rna_CADPart_rollback_feature_set(PointerRNA *ptr,
                                              PointerRNA value,
                                              ReportList * /*reports*/)
@@ -429,10 +458,48 @@ static bool rna_cad_points_exist(const CADSketch *sketch,
   return true;
 }
 
+/** After sketch edits: re-solve (constraints may now pull differently) and update. */
+static void rna_cad_sketch_changed(ID *id, CADSketch *sketch)
+{
+  if (sketch->constraints_num > 0) {
+    BKE_cad_sketch_solve(id_cast<CADPart *>(id), sketch);
+  }
+  rna_cad_tag(id);
+}
+
+static bool rna_CADSketch_solve(ID *id, CADSketch *sketch)
+{
+  const bool ok = BKE_cad_sketch_solve(id_cast<CADPart *>(id), sketch);
+  rna_cad_tag(id);
+  return ok;
+}
+
+static CADSketch *rna_cad_constraint_sketch(const CADPart *part, const CADSketchConstraint *c)
+{
+  for (CADFeature &feature : const_cast<CADPart *>(part)->features) {
+    CADSketch *sketch = feature.sketch;
+    if (sketch && c >= sketch->constraints && c < sketch->constraints + sketch->constraints_num) {
+      return sketch;
+    }
+  }
+  return nullptr;
+}
+
+static void rna_CADSketchConstraint_update_value(Main * /*bmain*/,
+                                                 Scene * /*scene*/,
+                                                 PointerRNA *ptr)
+{
+  CADPart *part = id_cast<CADPart *>(ptr->owner_id);
+  if (CADSketch *sketch = rna_cad_constraint_sketch(part, ptr->data_as<CADSketchConstraint>())) {
+    BKE_cad_sketch_solve(part, sketch);
+  }
+  rna_cad_tag(&part->id);
+}
+
 static int rna_CADSketch_point_add(ID *id, CADSketch *sketch, const float co[2])
 {
   const int uid = BKE_cad_sketch_point_add(id_cast<CADPart *>(id), sketch, double2(co[0], co[1]));
-  rna_cad_tag(id);
+  rna_cad_sketch_changed(id, sketch);
   return uid;
 }
 
@@ -442,7 +509,7 @@ static int rna_CADSketch_line_add(ID *id, CADSketch *sketch, ReportList *reports
     return -1;
   }
   const int uid = BKE_cad_sketch_line_add(id_cast<CADPart *>(id), sketch, p0, p1);
-  rna_cad_tag(id);
+  rna_cad_sketch_changed(id, sketch);
   return uid;
 }
 
@@ -453,7 +520,7 @@ static int rna_CADSketch_circle_add(
     return -1;
   }
   const int uid = BKE_cad_sketch_circle_add(id_cast<CADPart *>(id), sketch, center, radius);
-  rna_cad_tag(id);
+  rna_cad_sketch_changed(id, sketch);
   return uid;
 }
 
@@ -469,7 +536,7 @@ static int rna_CADSketch_arc_add(ID *id,
     return -1;
   }
   const int uid = BKE_cad_sketch_arc_add(id_cast<CADPart *>(id), sketch, center, start, end, ccw);
-  rna_cad_tag(id);
+  rna_cad_sketch_changed(id, sketch);
   return uid;
 }
 
@@ -481,7 +548,7 @@ static int rna_CADSketch_constraint_add(
                                                 eCADConstraintType(type),
                                                 Span<int>(entities, entities_num),
                                                 value);
-  rna_cad_tag(id);
+  rna_cad_sketch_changed(id, sketch);
   return uid;
 }
 
@@ -545,6 +612,12 @@ static void rna_def_cad_sketch_elements(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Fixed", "");
   RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
 
+  prop = RNA_def_property(srna, "is_constrained", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_SKETCH_CONSTRAINED);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Fully Constrained", "The constraints leave the point no freedom to move (last solve)");
+
   srna = RNA_def_struct(brna, "CADSketchCurve", nullptr);
   RNA_def_struct_ui_text(srna, "Sketch Curve", "");
   RNA_def_struct_path_func(srna, "rna_CADSketchCurve_path");
@@ -557,6 +630,12 @@ static void rna_def_cad_sketch_elements(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_cad_sketch_curve_type_items);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Type", "");
+
+  prop = RNA_def_property(srna, "is_constrained", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_SKETCH_CONSTRAINED);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Fully Constrained", "The constraints leave the curve no freedom to move (last solve)");
 
   prop = RNA_def_property(srna, "points", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "points");
@@ -604,7 +683,41 @@ static void rna_def_cad_sketch_elements(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "value", PROP_FLOAT, PROP_NONE);
   RNA_def_property_ui_text(prop, "Value", "Dimension value (scene length or radians)");
-  RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+  RNA_def_property_update(prop, 0, "rna_CADSketchConstraint_update_value");
+
+  /* Unit-aware views of `value` for the UI. */
+  prop = RNA_def_property(srna, "length", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_funcs(prop,
+                               "rna_CADSketchConstraint_length_get",
+                               "rna_CADSketchConstraint_length_set",
+                               nullptr);
+  RNA_def_property_range(prop, 0.0, FLT_MAX);
+  RNA_def_property_ui_text(prop, "Length", "Value of a distance, radius or diameter dimension");
+  RNA_def_property_update(prop, 0, "rna_CADSketchConstraint_update_value");
+
+  prop = RNA_def_property(srna, "angle", PROP_FLOAT, PROP_ANGLE);
+  RNA_def_property_float_funcs(
+      prop, "rna_CADSketchConstraint_angle_get", "rna_CADSketchConstraint_angle_set", nullptr);
+  RNA_def_property_ui_text(prop, "Angle", "Value of an angle dimension");
+  RNA_def_property_update(prop, 0, "rna_CADSketchConstraint_update_value");
+
+  prop = RNA_def_property(srna, "is_conflicting", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_CONSTRAINT_CONFLICTING);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Conflicting", "Contradicts other constraints (from the last solve)");
+
+  prop = RNA_def_property(srna, "is_redundant", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_CONSTRAINT_REDUNDANT);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Redundant", "Already implied by other constraints (from the last solve)");
+
+  prop = RNA_def_property(srna, "is_malformed", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_CONSTRAINT_MALFORMED);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Malformed", "Refers to missing geometry or geometry of the wrong kind; ignored");
 }
 
 static void rna_def_cad_sketch(BlenderRNA *brna)
@@ -644,8 +757,38 @@ static void rna_def_cad_sketch(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "CADSketchConstraint");
   RNA_def_property_ui_text(prop, "Constraints", "");
 
+  static const EnumPropertyItem solve_status_items[] = {
+      {CAD_SKETCH_SOLVE_OK, "OK", 0, "OK", "All constraints hold"},
+      {CAD_SKETCH_SOLVE_CONFLICTING,
+       "CONFLICTING",
+       0,
+       "Conflicting",
+       "Some constraints contradict each other"},
+      {CAD_SKETCH_SOLVE_FAILED, "FAILED", 0, "Failed", "The solver did not converge"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+  prop = RNA_def_property(srna, "solve_status", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, solve_status_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Solve Status", "Result of the last solve");
+
+  prop = RNA_def_property(srna, "dof", PROP_INT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Degrees of Freedom",
+                           "How many ways the geometry can still move (0: fully constrained, "
+                           "-1: not solved yet)");
+
   FunctionRNA *func;
   PropertyRNA *parm;
+
+  func = RNA_def_function(srna, "solve", "rna_CADSketch_solve");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+  RNA_def_function_ui_description(
+      func,
+      "Move the geometry so all constraints hold. Returns False when constraints conflict or "
+      "the solver fails (geometry unchanged)");
+  RNA_def_function_return(func, RNA_def_boolean(func, "ok", false, "", ""));
 
   func = RNA_def_function(srna, "point_add", "rna_CADSketch_point_add");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID);
@@ -687,7 +830,10 @@ static void rna_def_cad_sketch(BlenderRNA *brna)
 
   func = RNA_def_function(srna, "constraint_add", "rna_CADSketch_constraint_add");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID);
-  RNA_def_function_ui_description(func, "Add a constraint or dimension, returns its uid");
+  RNA_def_function_ui_description(
+      func,
+      "Add a constraint or dimension and solve, returns its uid. Entities are point or curve "
+      "uids; -2 is the sketch origin, -3 the X axis, -4 the Y axis");
   parm = RNA_def_enum(func, "type", rna_enum_cad_constraint_type_items, 0, "Type", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_int_array(
@@ -864,6 +1010,12 @@ static void rna_def_cad_part(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_cad_kernel_items);
   RNA_def_property_ui_text(prop, "Kernel", "B-rep modeling kernel that evaluates this part");
   RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+
+  prop = RNA_def_property(srna, "edit_sketch", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CADFeature");
+  RNA_def_property_pointer_funcs(prop, "rna_CADPart_edit_sketch_get", nullptr, nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Edit Sketch", "Sketch edited in sketch mode");
 
   prop = RNA_def_property(srna, "rollback_feature", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "CADFeature");

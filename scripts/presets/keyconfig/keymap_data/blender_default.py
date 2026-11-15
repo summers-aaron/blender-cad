@@ -6177,6 +6177,46 @@ def km_edit_pointcloud(params):
     return keymap
 
 
+# CAD part sketch mode (SimpleCAD).
+def km_cad_sketch(params):
+    items = []
+    keymap = (
+        "CAD Sketch",
+        {"space_type": 'EMPTY', "region_type": 'WINDOW'},
+        {"items": items},
+    )
+
+    items.extend([
+        # Selecting and dragging (the Select tool has no keymap of its own).
+        ("cad.sketch_select", {"type": 'LEFTMOUSE', "value": 'CLICK'},
+         {"properties": [("deselect_all", True)]}),
+        ("cad.sketch_select", {"type": 'LEFTMOUSE', "value": 'CLICK', "shift": True},
+         {"properties": [("extend", True)]}),
+        ("cad.sketch_drag", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'}, None),
+        ("cad.sketch_dimension_edit", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
+        ("cad.sketch_select_all", {"type": 'A', "value": 'PRESS'},
+         {"properties": [("action", 'SELECT')]}),
+        ("cad.sketch_select_all", {"type": 'A', "value": 'PRESS', "alt": True},
+         {"properties": [("action", 'DESELECT')]}),
+        ("cad.sketch_delete", {"type": 'X', "value": 'PRESS'}, None),
+        ("cad.sketch_delete", {"type": 'DEL', "value": 'PRESS'}, None),
+        # Drawing tools.
+        ("cad.sketch_line", {"type": 'L', "value": 'PRESS'}, None),
+        ("cad.sketch_rectangle", {"type": 'R', "value": 'PRESS'}, None),
+        ("cad.sketch_circle", {"type": 'C', "value": 'PRESS'}, None),
+        ("cad.sketch_arc", {"type": 'C', "value": 'PRESS', "shift": True}, None),
+        ("cad.sketch_dimension", {"type": 'D', "value": 'PRESS'}, None),
+        # Constraints.
+        ("cad.sketch_constrain", {"type": 'H', "value": 'PRESS'},
+         {"properties": [("type", 'HORIZONTAL_VERTICAL')]}),
+        op_menu("CAD_MT_sketch_constrain", {"type": 'C', "value": 'PRESS', "alt": True}),
+        ("cad.sketch_construction_toggle", {"type": 'Q', "value": 'PRESS'}, None),
+        ("cad.sketch_finish", {"type": 'RET', "value": 'PRESS', "ctrl": True}, None),
+    ])
+
+    return keymap
+
+
 # ------------------------------------------------------------------------------
 # Modal Maps and Gizmos
 
@@ -9197,6 +9237,7 @@ def generate_keymaps(params=None):
         km_edit_curve_legacy(params),
         km_edit_curves(params),
         km_edit_pointcloud(params),
+        km_cad_sketch(params),
 
         # Modal maps.
         km_eyedropper_modal_map(params),

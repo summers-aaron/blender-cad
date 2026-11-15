@@ -75,6 +75,7 @@
 #include "ED_armature.hh"
 #include "ED_asset.hh"
 #include "ED_asset_menu_utils.hh"
+#include "ED_cad.hh"
 #include "ED_curve.hh"
 #include "ED_gpencil_legacy.hh"
 #include "ED_grease_pencil.hh"
@@ -756,7 +757,7 @@ static bool editmode_load_free_ex(Main *bmain,
       ED_mball_editmball_free(obedit);
     }
   }
-  else if (ELEM(obedit->type, OB_CURVES, OB_GREASE_PENCIL, OB_POINTCLOUD)) {
+  else if (ELEM(obedit->type, OB_CURVES, OB_GREASE_PENCIL, OB_POINTCLOUD, OB_CAD)) {
     /* Object doesn't have specific edit mode data, so pass. */
   }
   else {
@@ -818,6 +819,9 @@ bool editmode_exit_ex(Main *bmain, Scene *scene, Object *obedit, int flag)
 
     WM_main_add_notifier(NC_SCENE | ND_MODE | NS_MODE_OBJECT, scene);
 
+    if (obedit->type == OB_CAD) {
+      cad::sketch_edit_exit(bmain, obedit);
+    }
     obedit->mode &= ~OB_MODE_EDIT;
   }
 
@@ -975,6 +979,11 @@ bool editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag)
   else if (ob->type == OB_POINTCLOUD) {
     ok = true;
     WM_main_add_notifier(NC_SCENE | ND_MODE | NS_EDITMODE_POINTCLOUD, scene);
+  }
+  else if (ob->type == OB_CAD) {
+    /* Sketch mode edits the original data directly; see `editors/cad`. */
+    ok = cad::sketch_edit_enter(bmain, scene, ob);
+    WM_main_add_notifier(NC_SCENE | ND_MODE | NS_EDITMODE_CAD, scene);
   }
 
   if (ok) {

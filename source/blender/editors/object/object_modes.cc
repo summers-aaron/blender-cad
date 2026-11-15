@@ -126,6 +126,7 @@ bool mode_compat_test(const Object *ob, eObjectMode mode)
     case OB_MBALL:
     case OB_POINTCLOUD:
     case OB_LATTICE:
+    case OB_CAD:
       if (mode & OB_MODE_EDIT) {
         return true;
       }

@@ -141,6 +141,44 @@ int BKE_cad_sketch_constraint_add(CADPart *part,
                                   Span<int> entities,
                                   double value);
 
+/** Pull a sketch point towards a position while solving (dragging). */
+struct CADSketchDrag {
+  int point = 0;
+  double2 co = {0.0, 0.0};
+};
+
+/**
+ * Solves the sketch's constraints: moves points and changes radii so all constraints hold,
+ * staying close to the current geometry. Updates #CADSketch.dof, #CADSketch.solve_status and the
+ * conflict flags of the constraints. Geometry is left unchanged when constraints conflict or
+ * the solver fails; returns false then.
+ */
+bool BKE_cad_sketch_solve(const CADPart *part, CADSketch *sketch, Span<CADSketchDrag> drag = {});
+
+/** The feature that owns `sketch`, or null. */
+CADFeature *BKE_cad_sketch_feature(const CADPart *part, const CADSketch *sketch);
+
+/** Deep copy / free of a sketch (for sketch mode undo). */
+CADSketch *BKE_cad_sketch_copy(const CADSketch *sketch);
+void BKE_cad_sketch_free(CADSketch *sketch);
+
+CADSketchCurve *BKE_cad_sketch_curve_find(const CADSketch *sketch, int uid);
+CADSketchConstraint *BKE_cad_sketch_constraint_find(const CADSketch *sketch, int uid);
+/** True when any curve uses the point. */
+bool BKE_cad_sketch_point_is_used(const CADSketch *sketch, int point_uid);
+
+/**
+ * Removes selected curves, points and constraints, the curves using removed points, points that
+ * only the removed curves used, and constraints that refer to removed geometry.
+ * Returns true when anything was removed.
+ */
+bool BKE_cad_sketch_remove_selected(CADSketch *sketch);
+/** Removes elements by uid (points, curves or constraints), with the same cleanup. */
+bool BKE_cad_sketch_remove(CADSketch *sketch, Span<int> uids);
+
+/** Selection of all points, curves and constraints. */
+bool BKE_cad_sketch_select_all(CADSketch *sketch, bool select);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

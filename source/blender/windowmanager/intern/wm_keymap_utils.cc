@@ -126,6 +126,9 @@ wmKeyMap *WM_keymap_guess_from_context(const bContext *C)
       case CTX_MODE_EDIT_POINTCLOUD:
         km_id = "Point Cloud";
         break;
+      case CTX_MODE_EDIT_CAD:
+        km_id = "CAD Sketch";
+        break;
       case CTX_MODE_POSE:
         km_id = "Pose";
         break;
@@ -527,6 +530,9 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
             break;
           case CTX_MODE_EDIT_POINTCLOUD:
             km = WM_keymap_find_all(wm, "Point Cloud", SPACE_EMPTY, RGN_TYPE_WINDOW);
+            break;
+          case CTX_MODE_EDIT_CAD:
+            km = WM_keymap_find_all(wm, "CAD Sketch", SPACE_EMPTY, RGN_TYPE_WINDOW);
             break;
           case CTX_MODE_SCULPT:
             km = WM_keymap_find_all(wm, "Sculpt", SPACE_EMPTY, RGN_TYPE_WINDOW);

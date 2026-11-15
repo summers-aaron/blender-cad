@@ -66,6 +66,8 @@ enum eCADSketchElementFlag : char {
   CAD_SKETCH_SELECT = 1 << 0,
   CAD_SKETCH_CONSTRUCTION = 1 << 1,
   CAD_SKETCH_FIXED = 1 << 2,
+  /** Fully constrained: the constraints leave it no freedom to move (set by the solver). */
+  CAD_SKETCH_CONSTRAINED = 1 << 3,
 };
 
 /** #CADSketchConstraint::type */
@@ -101,10 +103,41 @@ enum eCADParamUnit : int {
   CAD_UNIT_ANGLE = 2,
 };
 
+/** Entity uids in #CADSketchConstraint.entities that refer to the sketch frame. */
+enum eCADSketchFrameUid : int {
+  CAD_SKETCH_ORIGIN = -2,
+  CAD_SKETCH_X_AXIS = -3,
+  CAD_SKETCH_Y_AXIS = -4,
+};
+
+/** #CADSketchConstraint.flag (set by the solver). */
+enum eCADConstraintFlag : short {
+  /** Contradicts other constraints. */
+  CAD_CONSTRAINT_CONFLICTING = 1 << 0,
+  /** Implied by other constraints. */
+  CAD_CONSTRAINT_REDUNDANT = 1 << 1,
+  /** Refers to missing entities or entities of the wrong kind; ignored. */
+  CAD_CONSTRAINT_MALFORMED = 1 << 2,
+  /** Selected in sketch mode (dimension labels, constraint glyphs). */
+  CAD_CONSTRAINT_SELECT = 1 << 8,
+};
+
+/** #CADSketch.solve_status */
+enum eCADSketchSolveStatus : char {
+  CAD_SKETCH_SOLVE_OK = 0,
+  CAD_SKETCH_SOLVE_CONFLICTING = 1,
+  CAD_SKETCH_SOLVE_FAILED = 2,
+};
+
 /** #CADPart.flag */
 enum eCADPartFlag : int {
   /** Do not draw the B-rep edges in the viewport. */
   CAD_PART_HIDE_EDGES = 1 << 0,
+  /**
+   * A sketch is being edited (sketch mode). Stored so that re-entering the mode after an undo
+   * step or file load keeps the state saved when the mode was entered.
+   */
+  CAD_PART_SKETCH_EDITING = 1 << 1,
 };
 
 /** \} */
@@ -175,7 +208,11 @@ struct CADSketch {
   int points_num = 0;
   int curves_num = 0;
   int constraints_num = 0;
-  int _pad = 0;
+  /** Degrees of freedom left after the last solve (-1: not solved yet). */
+  short dof = -1;
+  /** #eCADSketchSolveStatus of the last solve. */
+  char solve_status = CAD_SKETCH_SOLVE_OK;
+  char _pad = 0;
 };
 
 struct CADFeature {
@@ -235,9 +272,12 @@ struct CADPart {
   int active_feature_uid = -1;
   /** Sketch being edited in sketch mode, -1 when none. */
   int edit_sketch_uid = -1;
+  /** #rollback_uid before sketch mode moved the marker to the edited sketch. */
+  int edit_prev_rollback_uid = -1;
   int flag = 0;
   /** Fork-local format version for versioning without upstream file subversions. */
   int format_version = 1;
+  int _pad1 = 0;
 
   /** Millimeters per Blender unit, fixed when the part is created. */
   double mm_per_unit = 1000.0;

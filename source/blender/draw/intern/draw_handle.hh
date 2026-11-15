@@ -480,6 +480,8 @@ class ObjectRef {
           return ctx_mode == CTX_MODE_EDIT_CURVES;
         case OB_POINTCLOUD:
           return ctx_mode == CTX_MODE_EDIT_POINTCLOUD;
+        case OB_CAD:
+          return ctx_mode == CTX_MODE_EDIT_CAD;
         case OB_GREASE_PENCIL:
           return ctx_mode == CTX_MODE_EDIT_GREASE_PENCIL;
         case OB_VOLUME:
