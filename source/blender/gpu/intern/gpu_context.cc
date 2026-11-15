@@ -476,6 +476,33 @@ void GPU_vulkan_supported_devices_print(FILE *fp)
 }
 #endif
 
+/** Whether `type` was compiled into this build (supported or not on this system). */
+static bool gpu_backend_compiled(const GPUBackendType type)
+{
+  switch (type) {
+    case GPU_BACKEND_OPENGL:
+#ifdef WITH_OPENGL_BACKEND
+      return true;
+#else
+      return false;
+#endif
+    case GPU_BACKEND_VULKAN:
+#ifdef WITH_VULKAN_BACKEND
+      return true;
+#else
+      return false;
+#endif
+    case GPU_BACKEND_METAL:
+#ifdef WITH_METAL_BACKEND
+      return true;
+#else
+      return false;
+#endif
+    default:
+      return false;
+  }
+}
+
 bool GPU_backend_type_selection_detect()
 {
   /* Only detect once, can't switch backend until Blender restart. */
@@ -512,7 +539,11 @@ bool GPU_backend_type_selection_detect()
       }
       return true;
     }
-    G.f |= G_FLAG_GPU_BACKEND_FALLBACK;
+    /* Only warn when a backend of this build failed. A preferred backend that was not compiled
+     * in (the default Vulkan preference in an OpenGL-only build) silently uses the next one. */
+    if (gpu_backend_compiled(backend_type)) {
+      G.f |= G_FLAG_GPU_BACKEND_FALLBACK;
+    }
   }
 
   GPU_backend_type_selection_set(GPU_BACKEND_NONE);

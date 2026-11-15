@@ -226,6 +226,7 @@ const EnumPropertyItem rna_enum_object_type_items[] = {
     OBTYPE_CU_FONT,
     {OB_CURVES, "CURVES", ICON_OUTLINER_OB_CURVES, "Hair Curves", ""},
     {OB_POINTCLOUD, "POINTCLOUD", ICON_OUTLINER_OB_POINTCLOUD, "Point Cloud", ""},
+    {OB_CAD, "CAD", ICON_MESH_CUBE, "CAD Part", ""},
     {OB_VOLUME, "VOLUME", ICON_OUTLINER_OB_VOLUME, "Volume", ""},
     {OB_GREASE_PENCIL, "GREASEPENCIL", ICON_OUTLINER_OB_GREASEPENCIL, "Grease Pencil", ""},
     RNA_ENUM_ITEM_SEPR,
@@ -626,6 +627,8 @@ static StructRNA *rna_Object_data_typef(PointerRNA *ptr)
       return RNA_Curves;
     case OB_POINTCLOUD:
       return RNA_PointCloud;
+    case OB_CAD:
+      return RNA_CADPart;
     case OB_VOLUME:
       return RNA_Volume;
     default:

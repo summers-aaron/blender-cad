@@ -500,6 +500,12 @@ class TOPBAR_MT_file_export(Menu):
                 text=FileHandler.label_with_extensions("IO_FH_ply"),
                 translate=False,
             )
+        # SimpleCAD: exact CAD solids (needs the OpenCASCADE kernel).
+        self.layout.operator(
+            "wm.step_export",
+            text=FileHandler.label_with_extensions("IO_FH_step"),
+            translate=False,
+        )
         if bpy.app.build_options.io_stl:
             self.layout.operator(
                 "wm.stl_export",

@@ -627,6 +627,7 @@ static void libblock_remap_foreach_idpair(ID *old_id, ID *new_id, Main *bmain, i
     case ID_CV:
     case ID_PT:
     case ID_VO:
+    case ID_CAD:
       if (new_id) { /* Only affects us in case obdata was relinked (changed). */
         for (Object *ob = bmain->objects.first(); ob; ob = static_cast<Object *>(ob->id.next)) {
           libblock_remap_data_postprocess_obdata_relink(bmain, ob, new_id);

@@ -1149,6 +1149,8 @@ ListBaseT<ID> *which_libbase(Main *bmain, short type)
       return &(bmain->pointclouds.cast<ID>());
     case ID_VO:
       return &(bmain->volumes.cast<ID>());
+    case ID_CAD:
+      return &(bmain->cad_parts.cast<ID>());
   }
   return nullptr;
 }
@@ -1189,6 +1191,7 @@ MainListsArray BKE_main_lists_get(Main &bmain)
   lb[INDEX_ID_CV] = &(bmain.hair_curves.cast<ID>());
   lb[INDEX_ID_PT] = &(bmain.pointclouds.cast<ID>());
   lb[INDEX_ID_VO] = &(bmain.volumes.cast<ID>());
+  lb[INDEX_ID_CAD] = &(bmain.cad_parts.cast<ID>());
 
   lb[INDEX_ID_LT] = &(bmain.lattices.cast<ID>());
   lb[INDEX_ID_LA] = &(bmain.lights.cast<ID>());

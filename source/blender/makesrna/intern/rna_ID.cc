@@ -60,6 +60,7 @@ const EnumPropertyItem rna_enum_id_type_items[] = {
     {ID_PAL, "PALETTE", ICON_COLOR, "Palette", ""},
     {ID_PA, "PARTICLE", ICON_PARTICLE_DATA, "Particle", ""},
     {ID_PT, "POINTCLOUD", ICON_POINTCLOUD_DATA, "Point Cloud", ""},
+    {ID_CAD, "CAD_PART", ICON_MESH_CUBE, "CAD Part", ""},
     {ID_SCE, "SCENE", ICON_SCENE_DATA, "Scene", ""},
     {ID_SCR, "SCREEN", ICON_WORKSPACE, "Screen", ""},
     {ID_SO, "SOUND", ICON_SOUND, "Sound", ""},
@@ -195,6 +196,7 @@ const IDFilterEnumPropertyItem rna_enum_id_type_filter_items[] = {
      ICON_POINTCLOUD_DATA,
      "Point Clouds",
      "Show/hide Point Cloud data-blocks"},
+    {FILTER_ID_CAD, "filter_cad_part", ICON_MESH_CUBE, "CAD Parts", "Show/hide CAD Part data-blocks"},
     {FILTER_ID_SCE, "filter_scene", ICON_SCENE_DATA, "Scenes", "Show Scene data-blocks"},
     {FILTER_ID_SPK, "filter_speaker", ICON_SPEAKER, "Speakers", "Show Speaker data-blocks"},
     {FILTER_ID_SO, "filter_sound", ICON_SOUND, "Sounds", "Show Sound data-blocks"},
@@ -519,6 +521,9 @@ short RNA_type_to_ID_code(const StructRNA *type)
   if (base_type == RNA_PointCloud) {
     return ID_PT;
   }
+  if (base_type == RNA_CADPart) {
+    return ID_CAD;
+  }
   if (base_type == RNA_LightProbe) {
     return ID_LP;
   }
@@ -618,6 +623,8 @@ StructRNA *ID_code_to_RNA_type(short idcode)
       return RNA_PaintCurve;
     case ID_PT:
       return RNA_PointCloud;
+    case ID_CAD:
+      return RNA_CADPart;
     case ID_LP:
       return RNA_LightProbe;
     case ID_SCE:

@@ -309,6 +309,10 @@ option(WITH_XR_OPENXR "Enable VR features through the OpenXR specification" ON)
 option(WITH_GMP "Enable features depending on GMP (Exact Boolean)" ON)
 option(WITH_MANIFOLD "Enable features depending on Manifold (Fast Robust Boolean)" ON)
 
+option(WITH_CAD "Enable parametric CAD modeling (B-rep solids, sketches, feature history)" ON)
+option(WITH_CAD_OCCT "Enable the OpenCASCADE CAD kernel" ON)
+option(WITH_CAD_SMLIB "Enable the NVIDIA SMLib (USD BRep) CAD kernel, built from extern/smlib" ON)
+
 option(WITH_OPENIMAGEDENOISE "Enable OpenImageDenoise (Cycles denoiser and the compositor Denoise node)" ON)
 
 option(WITH_DLSS "Enable NVIDIA DLSS Ray Reconstruction support" OFF)

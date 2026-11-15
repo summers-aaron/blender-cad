@@ -32,6 +32,7 @@ set(SRC
   io_otio_ops.cc
   io_ply_ops.cc
   io_spz_ops.cc
+  io_step_ops.cc
   io_stl_ops.cc
   io_usd.cc
   io_utils.cc
@@ -46,6 +47,7 @@ set(SRC
   io_otio_ops.hh
   io_ply_ops.hh
   io_spz_ops.hh
+  io_step_ops.hh
   io_stl_ops.hh
   io_usd.hh
   io_utils.hh

@@ -20,6 +20,7 @@
 #define DNA_DEPRECATED_ALLOW
 
 #include "DNA_ID.h"
+#include "DNA_cad_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_curves_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -422,6 +423,9 @@ Material ***BKE_object_material_array_p(Object *ob)
     PointCloud *pointcloud = id_cast<PointCloud *>(ob->data);
     return &(pointcloud->mat);
   }
+  if (ob->type == OB_CAD) {
+    return &(id_cast<CADPart *>(ob->data)->mat);
+  }
   if (ob->type == OB_VOLUME) {
     Volume *volume = id_cast<Volume *>(ob->data);
     return &(volume->mat);
@@ -455,6 +459,9 @@ short *BKE_object_material_len_p(Object *ob)
     PointCloud *pointcloud = id_cast<PointCloud *>(ob->data);
     return &(pointcloud->totcol);
   }
+  if (ob->type == OB_CAD) {
+    return &(id_cast<CADPart *>(ob->data)->totcol);
+  }
   if (ob->type == OB_VOLUME) {
     Volume *volume = id_cast<Volume *>(ob->data);
     return &(volume->totcol);
@@ -484,6 +491,8 @@ Material ***BKE_id_material_array_p(ID *id)
       return &((id_cast<Curves *>(id))->mat);
     case ID_PT:
       return &((id_cast<PointCloud *>(id))->mat);
+    case ID_CAD:
+      return &((id_cast<CADPart *>(id))->mat);
     case ID_VO:
       return &((id_cast<Volume *>(id))->mat);
     case ID_GP:
@@ -512,6 +521,8 @@ short *BKE_id_material_len_p(ID *id)
       return &((id_cast<Curves *>(id))->totcol);
     case ID_PT:
       return &((id_cast<PointCloud *>(id))->totcol);
+    case ID_CAD:
+      return &((id_cast<CADPart *>(id))->totcol);
     case ID_VO:
       return &((id_cast<Volume *>(id))->totcol);
     case ID_GP:
@@ -541,6 +552,7 @@ static void material_data_index_remove_id(ID *id, short index)
     case ID_CV:
     case ID_PT:
     case ID_VO:
+    case ID_CAD:
       /* No material indices for these object data types. */
       break;
     default:
@@ -597,6 +609,7 @@ static void material_data_index_clear_id(ID *id)
     case ID_CV:
     case ID_PT:
     case ID_VO:
+    case ID_CAD:
       /* No material indices for these object data types. */
       break;
     default:
@@ -899,6 +912,7 @@ std::optional<int> BKE_id_material_index_max_eval(const ID &id)
       return reinterpret_cast<const GreasePencil &>(id).material_index_max();
     case ID_VO:
     case ID_MB:
+    case ID_CAD:
       /* Always use the first material. */
       return 0;
     case ID_GD_LEGACY:

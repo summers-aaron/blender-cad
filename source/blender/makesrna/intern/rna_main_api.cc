@@ -26,6 +26,7 @@
 #  include "BKE_annotations.h"
 #  include "BKE_armature.hh"
 #  include "BKE_brush.hh"
+#  include "BKE_cad.hh"
 #  include "BKE_camera.h"
 #  include "BKE_collection.hh"
 #  include "BKE_curve.hh"
@@ -371,6 +372,7 @@ static Mesh *rna_Main_meshes_new_from_object(Main *bmain,
     case OB_SURF:
     case OB_MBALL:
     case OB_MESH:
+    case OB_CAD:
       break;
     default:
       BKE_report(reports, RPT_ERROR, "Object does not have geometry data");
@@ -835,6 +837,19 @@ static PointCloud *rna_Main_pointclouds_new(Main *bmain, const char *name)
   return pointcloud;
 }
 
+static CADPart *rna_Main_cad_parts_new(Main *bmain, const char *name)
+{
+  char safe_name[MAX_ID_NAME - 2];
+  rna_idname_validate(name, safe_name);
+
+  CADPart *part = BKE_cad_part_add(bmain, safe_name);
+  id_us_min(&part->id);
+
+  WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
+
+  return part;
+}
+
 static Volume *rna_Main_volumes_new(Main *bmain, const char *name)
 {
   char safe_name[MAX_ID_NAME - 2];
@@ -893,6 +908,7 @@ RNA_MAIN_ID_TAG_FUNCS_DEF(workspaces, workspaces, ID_WS)
 RNA_MAIN_ID_TAG_FUNCS_DEF(lightprobes, lightprobes, ID_LP)
 RNA_MAIN_ID_TAG_FUNCS_DEF(hair_curves, hair_curves, ID_CV)
 RNA_MAIN_ID_TAG_FUNCS_DEF(pointclouds, pointclouds, ID_PT)
+RNA_MAIN_ID_TAG_FUNCS_DEF(cad_parts, cad_parts, ID_CAD)
 RNA_MAIN_ID_TAG_FUNCS_DEF(volumes, volumes, ID_VO)
 
 #  undef RNA_MAIN_ID_TAG_FUNCS_DEF
@@ -2478,6 +2494,54 @@ void RNA_def_main_pointclouds(BlenderRNA *brna, PropertyRNA *cprop)
                   "Make sure interface does not reference this point cloud data");
 
   func = RNA_def_function(srna, "tag", "rna_Main_pointclouds_tag");
+  parm = RNA_def_boolean(func, "value", false, "Value", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+}
+
+void RNA_def_main_cad_parts(BlenderRNA *brna, PropertyRNA *cprop)
+{
+  StructRNA *srna;
+  FunctionRNA *func;
+  PropertyRNA *parm;
+
+  RNA_def_property_srna(cprop, "BlendDataCADParts");
+  srna = RNA_def_struct(brna, "BlendDataCADParts", nullptr);
+  RNA_def_struct_sdna(srna, "Main");
+  RNA_def_struct_ui_text(srna, "Main CAD Parts", "Collection of CAD parts");
+
+  func = RNA_def_function(srna, "new", "rna_Main_cad_parts_new");
+  RNA_def_function_ui_description(func, "Add a new CAD part to the main database");
+  parm = RNA_def_string(func, "name", "Part", 0, "", "New name for the data-block");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  /* return type */
+  parm = RNA_def_pointer(func, "part", "CADPart", "", "New CAD part data-block");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "remove", "rna_Main_ID_remove");
+  RNA_def_function_flag(func, FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(func, "Remove a CAD part from the current blendfile");
+  parm = RNA_def_pointer(func, "part", "CADPart", "", "CAD part to remove");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
+  RNA_def_boolean(func,
+                  "do_unlink",
+                  true,
+                  "",
+                  "Unlink all usages of this CAD part before deleting it "
+                  "(WARNING: will also delete objects instancing that CAD part)");
+  RNA_def_boolean(func,
+                  "do_id_user",
+                  true,
+                  "",
+                  "Decrement user counter of all data-blocks used by this CAD part");
+  RNA_def_boolean(func,
+                  "do_ui_user",
+                  true,
+                  "",
+                  "Make sure interface does not reference this CAD part");
+
+  func = RNA_def_function(srna, "tag", "rna_Main_cad_parts_tag");
   parm = RNA_def_boolean(func, "value", false, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 }

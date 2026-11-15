@@ -538,6 +538,55 @@ add_blender_test(
 )
 
 # ------------------------------------------------------------------------------
+# CAD PART TESTS (SimpleCAD)
+# ------------------------------------------------------------------------------
+
+if(WITH_CAD)
+  set(_cad_kernels)
+  if(WITH_CAD_OCCT)
+    list(APPEND _cad_kernels OCCT)
+  endif()
+  if(WITH_CAD_SMLIB)
+    list(APPEND _cad_kernels SMLIB)
+  endif()
+  foreach(_kernel ${_cad_kernels})
+    add_blender_test(
+      cad_part_basic_${_kernel}
+      --python ${CMAKE_CURRENT_LIST_DIR}/cad_part_basic.py -- ${_kernel}
+    )
+    # Checks that operators report errors (e.g. invalid moves), so allow error reports.
+    add_blender_test_allow_error(
+      cad_part_ops_${_kernel}
+      --python ${CMAKE_CURRENT_LIST_DIR}/cad_part_ops.py -- ${_kernel}
+    )
+  endforeach()
+  add_blender_test(
+    cad_ui_smoke
+    --python ${CMAKE_CURRENT_LIST_DIR}/cad_ui_smoke.py
+  )
+
+  # Interactive picking with simulated events, in a virtual X display when available.
+  find_program(XVFB_RUN_BIN xvfb-run)
+  mark_as_advanced(XVFB_RUN_BIN)
+  if(XVFB_RUN_BIN AND UNIX AND NOT APPLE)
+    foreach(_kernel ${_cad_kernels})
+      add_test(
+        NAME cad_gui_pick_${_kernel}
+        COMMAND ${CMAKE_COMMAND} -E env --unset=WAYLAND_DISPLAY
+                ${XVFB_RUN_BIN} -a -s "-screen 0 1920x1080x24"
+                ${TEST_BLENDER_EXE} --factory-startup --enable-event-simulate
+                --window-geometry 0 0 1920 1080
+                --python ${CMAKE_CURRENT_LIST_DIR}/cad_gui_pick.py -- ${_kernel}
+      )
+      set_tests_properties(cad_gui_pick_${_kernel} PROPERTIES
+        PASS_REGULAR_EXPRESSION "ALL OK \\(GUI pick\\)"
+      )
+    endforeach()
+  endif()
+  unset(_cad_kernels)
+endif()
+
+# ------------------------------------------------------------------------------
 # MODELING TESTS
 # ------------------------------------------------------------------------------
 

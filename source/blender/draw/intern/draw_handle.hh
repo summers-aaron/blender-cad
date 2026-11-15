@@ -258,6 +258,12 @@ class ObjectRef {
     return dupli_parent_ != nullptr;
   }
 
+  /** Object that created the dupli-list this object is part of, or null. */
+  Object *dupli_parent() const
+  {
+    return dupli_parent_;
+  }
+
   bool is_active(const Object *active_object) const
   {
     return (dupli_parent_ ? dupli_parent_ : object) == active_object;

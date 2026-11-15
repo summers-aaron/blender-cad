@@ -42,6 +42,22 @@ if(WITH_MANIFOLD)
 endif()
 
 # -----------------------------------------------------------------------------
+# Configure OpenCASCADE (CAD kernel)
+
+add_library(bf_deps_optional_opencascade INTERFACE)
+add_library(bf::dependencies::optional::opencascade ALIAS bf_deps_optional_opencascade)
+if(WITH_CAD AND WITH_CAD_OCCT)
+  target_compile_definitions(bf_deps_optional_opencascade INTERFACE WITH_CAD_OCCT)
+  target_include_directories(bf_deps_optional_opencascade SYSTEM INTERFACE
+    ${OpenCASCADE_INCLUDE_DIR}
+  )
+  target_link_libraries(bf_deps_optional_opencascade INTERFACE
+    TKDESTEP TKDE TKXSBase TKMesh TKFillet TKOffset TKBool TKBO TKShHealing TKPrim
+    TKTopAlgo TKGeomAlgo TKBRep TKGeomBase TKG3d TKG2d TKMath TKernel
+  )
+endif()
+
+# -----------------------------------------------------------------------------
 # Configure OpenVDB
 
 add_library(bf_deps_optional_openvdb INTERFACE)

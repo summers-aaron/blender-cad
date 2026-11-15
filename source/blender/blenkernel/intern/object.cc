@@ -70,6 +70,7 @@
 #include "BKE_armature.hh"
 #include "BKE_asset.hh"
 #include "BKE_bpath.hh"
+#include "BKE_cad.hh"
 #include "BKE_camera.h"
 #include "BKE_collection.hh"
 #include "BKE_constraint.h"
@@ -1455,6 +1456,7 @@ bool BKE_object_supports_modifiers(const Object *ob)
               OB_POINTCLOUD,
               OB_VOLUME,
               OB_GREASE_PENCIL,
+              OB_CAD,
               OB_EMPTY);
 }
 
@@ -1476,6 +1478,10 @@ bool BKE_object_support_modifier_type_check(const Object *ob, int modifier_type)
   }
   if (ob->type == OB_VOLUME) {
     return mti->modify_geometry_set != nullptr;
+  }
+  if (ob->type == OB_CAD) {
+    /* CAD parts evaluate to a mesh: mesh modifiers and geometry nodes run on it. */
+    return (mti->flags & eModifierTypeFlag_AcceptsMesh) || modifier_type == eModifierType_Nodes;
   }
   if (ELEM(ob->type, OB_MESH, OB_CURVES_LEGACY, OB_SURF, OB_FONT, OB_LATTICE)) {
     if (ob->type == OB_LATTICE && (mti->flags & eModifierTypeFlag_AcceptsVertexCosOnly) == 0) {
@@ -1998,6 +2004,7 @@ char *BKE_object_data_editmode_flush_ptr_get(ID *id)
     case ID_GP:
     case ID_PT:
     case ID_CV:
+    case ID_CAD:
       return nullptr;
     default:
       BLI_assert_unreachable();
@@ -2139,6 +2146,8 @@ static const char *get_obdata_defname(ObjectType type)
       return DATA_("Curves");
     case OB_POINTCLOUD:
       return DATA_("PointCloud");
+    case OB_CAD:
+      return CTX_DATA_(BLT_I18NCONTEXT_ID_CADPART, "Part");
     case OB_VOLUME:
       return CTX_DATA_(BLT_I18NCONTEXT_ID_ID, "Volume");
     case OB_EMPTY:
@@ -2212,6 +2221,8 @@ void *BKE_object_obdata_add_from_type(Main *bmain, ObjectType type, const char *
       return BKE_curves_add(bmain, name);
     case OB_POINTCLOUD:
       return BKE_pointcloud_add(bmain, name);
+    case OB_CAD:
+      return BKE_cad_part_add(bmain, name);
     case OB_VOLUME:
       return BKE_volume_add(bmain, name);
     case OB_GREASE_PENCIL:
@@ -2250,6 +2261,8 @@ int BKE_object_obdata_to_type(const ID *id)
       return OB_CURVES;
     case ID_PT:
       return OB_POINTCLOUD;
+    case ID_CAD:
+      return OB_CAD;
     case ID_VO:
       return OB_VOLUME;
     case ID_GP:
@@ -2771,6 +2784,11 @@ Object *BKE_object_duplicate(Main *bmain,
       break;
     case OB_POINTCLOUD:
       if (dupflag & USER_DUP_POINTCLOUD) {
+        id_new = BKE_id_copy_for_duplicate(bmain, id_old, dupflag, copy_flags);
+      }
+      break;
+    case OB_CAD:
+      if (dupflag & USER_DUP_MESH) {
         id_new = BKE_id_copy_for_duplicate(bmain, id_old, dupflag, copy_flags);
       }
       break;
@@ -3739,6 +3757,8 @@ std::optional<Bounds<float3>> BKE_object_boundbox_get(const Object *ob)
       return id_cast<const Curves *>(ob->data)->geometry.wrap().bounds_min_max();
     case OB_POINTCLOUD:
       return id_cast<const PointCloud *>(ob->data)->bounds_min_max();
+    case OB_CAD:
+      return BKE_object_evaluated_geometry_bounds(ob);
     case OB_VOLUME:
       return BKE_volume_min_max(id_cast<const Volume *>(ob->data));
     case OB_GREASE_PENCIL:
@@ -5187,7 +5207,8 @@ bool BKE_object_supports_material_slots(Object *ob)
               OB_CURVES,
               OB_POINTCLOUD,
               OB_VOLUME,
-              OB_GREASE_PENCIL);
+              OB_GREASE_PENCIL,
+              OB_CAD);
 }
 
 /** \} */

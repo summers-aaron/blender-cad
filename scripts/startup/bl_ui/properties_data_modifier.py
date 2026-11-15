@@ -66,6 +66,11 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         layout.template_modifiers()
 
 
+def _modifier_ob_type(ob):
+    # CAD parts evaluate to a mesh without editable mesh data, like surfaces.
+    return 'SURFACE' if ob.type == 'CAD' else ob.type
+
+
 class OBJECT_MT_modifier_add(ModifierAddMenu, Menu):
     bl_label = "Add Modifier"
     bl_options = {'SEARCH_ON_KEY_PRESS'}
@@ -79,8 +84,10 @@ class OBJECT_MT_modifier_add(ModifierAddMenu, Menu):
         ob_type = ob.type
         geometry_nodes_supported = ob_type in {
             'EMPTY', 'MESH', 'CURVE', 'CURVES',
-            'FONT', 'VOLUME', 'POINTCLOUD', 'GREASEPENCIL'
+            'FONT', 'VOLUME', 'POINTCLOUD', 'GREASEPENCIL', 'CAD'
         }
+        is_cad = ob_type == 'CAD'
+        ob_type = _modifier_ob_type(ob)
 
         if layout.operator_context == 'EXEC_REGION_WIN':
             layout.operator_context = 'INVOKE_REGION_WIN'
@@ -99,7 +106,7 @@ class OBJECT_MT_modifier_add(ModifierAddMenu, Menu):
             layout.menu("OBJECT_MT_modifier_add_generate")
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE', 'VOLUME', 'GREASEPENCIL'}:
             layout.menu("OBJECT_MT_modifier_add_deform")
-        if ob_type in {'MESH'}:
+        if ob_type in {'MESH'} or is_cad:
             layout.menu("OBJECT_MT_modifier_add_normals")
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE'}:
             layout.menu("OBJECT_MT_modifier_add_physics")
@@ -120,7 +127,7 @@ class OBJECT_MT_modifier_add_edit(ModifierAddMenu, Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob_type = context.object.type
+        ob_type = _modifier_ob_type(context.object)
         if ob_type == 'MESH':
             self.operator_modifier_add(layout, 'DATA_TRANSFER')
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE'}:
@@ -147,7 +154,7 @@ class OBJECT_MT_modifier_add_generate(ModifierAddMenu, Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob_type = context.object.type
+        ob_type = _modifier_ob_type(context.object)
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE'}:
             self.operator_modifier_add_asset(layout, 'Array', icon='MOD_ARRAY')
             self.operator_modifier_add(layout, 'ARRAY', text=n_("Array (Legacy)"), no_icon=True)
@@ -204,7 +211,7 @@ class OBJECT_MT_modifier_add_deform(ModifierAddMenu, Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob_type = context.object.type
+        ob_type = _modifier_ob_type(context.object)
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE'}:
             self.operator_modifier_add(layout, 'ARMATURE')
             self.operator_modifier_add(layout, 'CAST')
@@ -249,7 +256,7 @@ class OBJECT_MT_modifier_add_normals(ModifierAddMenu, Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob_type = context.object.type
+        ob_type = 'MESH' if context.object.type == 'CAD' else context.object.type
         if ob_type == 'MESH':
             self.operator_modifier_add(layout, 'NORMAL_EDIT')
             self.operator_modifier_add(layout, 'WEIGHTED_NORMAL')
@@ -262,7 +269,7 @@ class OBJECT_MT_modifier_add_physics(ModifierAddMenu, Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob_type = context.object.type
+        ob_type = _modifier_ob_type(context.object)
         if ob_type == 'MESH':
             self.operator_modifier_add(layout, 'CLOTH')
             self.operator_modifier_add(layout, 'COLLISION')
@@ -283,7 +290,7 @@ class OBJECT_MT_modifier_add_color(ModifierAddMenu, Menu):
 
     def draw(self, context):
         layout = self.layout
-        ob_type = context.object.type
+        ob_type = _modifier_ob_type(context.object)
         if ob_type == 'GREASEPENCIL':
             self.operator_modifier_add(layout, 'GREASE_PENCIL_COLOR')
             self.operator_modifier_add(layout, 'GREASE_PENCIL_OPACITY')

@@ -555,6 +555,12 @@ if(WITH_MANIFOLD)
   mark_as_advanced(manifold_DIR)
 endif()
 
+if(WITH_CAD AND WITH_CAD_OCCT)
+  find_package(OpenCASCADE CONFIG QUIET)
+  set_and_warn_library_found("OpenCASCADE" OpenCASCADE_FOUND WITH_CAD_OCCT)
+  mark_as_advanced(OpenCASCADE_DIR)
+endif()
+
 if(WITH_RUBBERBAND)
   if(DEFINED LIBDIR)
     find_package_wrapper(Rubberband)

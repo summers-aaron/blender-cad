@@ -198,6 +198,7 @@ class Bounds : Overlay {
         }
         case ID_CV:
         case ID_PT:
+        case ID_CAD:
         case ID_VO: {
           /* No user defined texture space support. */
           add_bounds(false, OB_BOUND_BOX);

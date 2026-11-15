@@ -18,6 +18,7 @@
 #include "BLI_string.hh"
 
 #include "BKE_armature.hh"
+#include "BKE_cad.hh"
 #include "BKE_constraint.h"
 #include "BKE_curve.hh"
 #include "BKE_curves.h"
@@ -228,6 +229,9 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
       break;
     case OB_POINTCLOUD:
       BKE_pointcloud_data_update(depsgraph, scene, ob);
+      break;
+    case OB_CAD:
+      BKE_cad_data_update(depsgraph, scene, ob);
       break;
     case OB_VOLUME:
       BKE_volume_data_update(depsgraph, scene, ob);

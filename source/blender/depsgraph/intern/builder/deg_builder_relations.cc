@@ -583,6 +583,7 @@ void DepsgraphRelationBuilder::build_id(ID *id)
     case ID_VO:
     case ID_GD_LEGACY:
     case ID_GP:
+    case ID_CAD:
       build_object_data_geometry_datablock(id);
       break;
     case ID_SPK:
@@ -1013,7 +1014,8 @@ void DepsgraphRelationBuilder::build_object_data(Object *object)
     case OB_CURVES:
     case OB_POINTCLOUD:
     case OB_VOLUME:
-    case OB_GREASE_PENCIL: {
+    case OB_GREASE_PENCIL:
+    case OB_CAD: {
       build_object_data_geometry(object);
       /* TODO(sergey): Only for until we support granular
        * update of curves. */
@@ -2872,6 +2874,7 @@ void DepsgraphRelationBuilder::build_object_data_geometry_datablock(ID *obdata)
       break;
     }
     case ID_PT:
+    case ID_CAD:
       break;
     case ID_VO: {
       Volume *volume = id_cast<Volume *>(obdata);
@@ -3798,7 +3801,7 @@ void DepsgraphRelationBuilder::build_copy_on_write_relations(IDNode *id_node)
       continue;
     }
     int rel_flag = (RELATION_FLAG_NO_FLUSH | RELATION_FLAG_GODMODE);
-    if ((ELEM(id_type, ID_ME, ID_CV, ID_PT, ID_VO) && comp_node->type == NodeType::GEOMETRY) ||
+    if ((ELEM(id_type, ID_ME, ID_CV, ID_PT, ID_VO, ID_CAD) && comp_node->type == NodeType::GEOMETRY) ||
         (id_type == ID_CF && comp_node->type == NodeType::CACHE))
     {
       rel_flag &= ~RELATION_FLAG_NO_FLUSH;

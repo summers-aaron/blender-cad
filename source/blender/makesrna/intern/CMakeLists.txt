@@ -79,6 +79,7 @@ set(DEFSRC
   rna_palette.cc
   rna_particle.cc
   rna_pointcloud.cc
+  rna_cad.cc
   rna_pose.cc
   rna_render.cc
   rna_rigidbody.cc
@@ -465,6 +466,7 @@ set(LIB
   bf_editor_animation
   bf_editor_armature
   bf_editor_asset
+  bf_editor_cad
   bf_editor_curve
   bf_editor_curves
   bf_editor_gizmo_library

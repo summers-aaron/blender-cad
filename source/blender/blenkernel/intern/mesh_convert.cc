@@ -926,6 +926,12 @@ Mesh *BKE_mesh_new_from_object(Depsgraph *depsgraph,
       new_mesh = mesh_new_from_mesh_object(
           depsgraph, object, preserve_all_data_layers, preserve_origindex, ensure_subdivision);
       break;
+    case OB_CAD:
+      /* CAD parts evaluate to a mesh (tessellated B-rep plus modifiers). */
+      if (const Mesh *mesh = BKE_object_get_evaluated_mesh(object)) {
+        new_mesh = BKE_mesh_copy_for_eval(*mesh);
+      }
+      break;
     default:
       /* Object does not have geometry data. */
       return nullptr;

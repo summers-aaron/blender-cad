@@ -622,6 +622,24 @@ install(
   DIRECTORY ${CMAKE_SOURCE_DIR}/release/datafiles/colormanagement
   DESTINATION ${TARGETDIR_VER}/datafiles
 )
+# A system OpenColorIO older than the config's profile version (e.g. 2.4 on Fedora) refuses to
+# load it. The config uses no features of the newer profile, so install it with the version the
+# library understands.
+if(DEFINED OpenColorIO_VERSION AND OpenColorIO_VERSION VERSION_LESS 2.5)
+  string(REGEX MATCH "^[0-9]+\\.[0-9]+" _ocio_profile "${OpenColorIO_VERSION}")
+  if(IS_ABSOLUTE "${TARGETDIR_VER}")
+    set(_ocio_config "${TARGETDIR_VER}/datafiles/colormanagement/config.ocio")
+  else()
+    set(_ocio_config "\${CMAKE_INSTALL_PREFIX}/${TARGETDIR_VER}/datafiles/colormanagement/config.ocio")
+  endif()
+  install(CODE "
+    file(READ \"${_ocio_config}\" _ocio_text)
+    string(REGEX REPLACE \"ocio_profile_version: [0-9.]+\" \"ocio_profile_version: ${_ocio_profile}\" _ocio_text \"\${_ocio_text}\")
+    file(WRITE \"${_ocio_config}\" \"\${_ocio_text}\")
+  ")
+  unset(_ocio_profile)
+  unset(_ocio_config)
+endif()
 if(WIN32)
   if(EXISTS ${LIBDIR}/osl/lib/python${PYTHON_VERSION}/site-packages/oslquery) # 4.4+
     install(

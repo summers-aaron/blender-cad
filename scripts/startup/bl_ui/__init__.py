@@ -33,6 +33,7 @@ _modules = [
     "properties_data_metaball",
     "properties_data_modifier",
     "properties_data_pointcloud",
+    "properties_data_cad",
     "properties_data_shaderfx",
     "properties_data_lightprobe",
     "properties_data_speaker",

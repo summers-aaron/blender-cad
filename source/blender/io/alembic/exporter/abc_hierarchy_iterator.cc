@@ -221,6 +221,8 @@ ABCAbstractWriter *ABCHierarchyIterator::create_data_writer_for_object_type(
     case OB_GPENCIL_LEGACY:
     case OB_VOLUME:
     case OB_GREASE_PENCIL:
+    /* CAD parts export their evaluated mesh through the geometry set instances. */
+    case OB_CAD:
       return nullptr;
     case OB_TYPE_MAX:
       BLI_assert_msg(0, "OB_TYPE_MAX should not be used");

@@ -594,6 +594,7 @@ ID *template_id_liboverride_hierarchy_make(
     case ID_GD_LEGACY:
     case ID_CV:
     case ID_PT:
+    case ID_CAD:
     case ID_VO:
     case ID_NT: /* Essentially geometry nodes from modifier currently. */
       if (object_active != nullptr) {
@@ -902,6 +903,8 @@ static StringRef template_id_browse_tip(const StructRNA *type)
         return N_("Browse Curves Data to be linked");
       case ID_PT:
         return N_("Browse Point Cloud Data to be linked");
+      case ID_CAD:
+        return N_("Browse CAD Part to be linked");
       case ID_VO:
         return N_("Browse Volume Data to be linked");
       case ID_GP:

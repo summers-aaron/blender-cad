@@ -53,6 +53,8 @@
 #include "BKE_anonymous_attribute_id.hh"
 #include "BKE_armature.hh"
 #include "BKE_attribute.h"
+#include "BKE_cad.hh"
+#include "BKE_idprop.hh"
 #include "BKE_camera.h"
 #include "BKE_collection.hh"
 #include "BKE_constraint.h"
@@ -2529,6 +2531,58 @@ void OBJECT_OT_pointcloud_random_add(wmOperatorType *ot)
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
+  add_generic_props(ot, false);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add CAD Part Operator
+ * \{ */
+
+static wmOperatorStatus object_cad_part_add_exec(bContext *C, wmOperator *op)
+{
+  ushort local_view_bits;
+  float loc[3], rot[3];
+  add_generic_get_opts(C, op, 'Z', loc, rot, nullptr, nullptr, &local_view_bits, nullptr);
+
+  Object *object = add_type(C, OB_CAD, nullptr, loc, rot, false, local_view_bits);
+  CADPart *part = id_cast<CADPart *>(object->data);
+
+  if (RNA_boolean_get(op->ptr, "add_box")) {
+    const double size = RNA_float_get(op->ptr, "size");
+    CADFeature *box = BKE_cad_feature_add(part, CAD_FEATURE_BOX);
+    const double3 min(-0.5 * size);
+    const double3 dims(size);
+    if (IDProperty *prop = IDP_GetPropertyFromGroup(box->params, "min")) {
+      MutableSpan<double>(static_cast<double *>(IDP_array_voidp_get(prop)), 3).copy_from(
+          Span<double>(&min.x, 3));
+    }
+    if (IDProperty *prop = IDP_GetPropertyFromGroup(box->params, "size")) {
+      MutableSpan<double>(static_cast<double *>(IDP_array_voidp_get(prop)), 3).copy_from(
+          Span<double>(&dims.x, 3));
+    }
+  }
+  DEG_id_tag_update(&part->id, ID_RECALC_GEOMETRY);
+
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_cad_part_add(wmOperatorType *ot)
+{
+  ot->name = "Add CAD Part";
+  ot->description = "Add a parametric CAD part object to the scene";
+  ot->idname = "OBJECT_OT_cad_part_add";
+
+  ot->exec = object_cad_part_add_exec;
+  ot->poll = ED_operator_objectmode;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_boolean(ot->srna, "add_box", true, "Start with Box", "Add a Box feature");
+  PropertyRNA *prop = RNA_def_float_distance(
+      ot->srna, "size", 2.0f, 0.0f, OBJECT_ADD_SIZE_MAXF, "Size", "", 0.001f, 100.0f);
+  RNA_def_property_subtype(prop, PROP_DISTANCE);
   add_generic_props(ot, false);
 }
 

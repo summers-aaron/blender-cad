@@ -276,6 +276,9 @@ static bool buttons_context_path_data(ButsContextPath *path, int type)
   if (RNA_struct_is_a(ptr->type, RNA_PointCloud) && ELEM(type, -1, OB_POINTCLOUD)) {
     return true;
   }
+  if (RNA_struct_is_a(ptr->type, RNA_CADPart) && ELEM(type, -1, OB_CAD)) {
+    return true;
+  }
   if (RNA_struct_is_a(ptr->type, RNA_Volume) && ELEM(type, -1, OB_VOLUME)) {
     return true;
   }
@@ -317,7 +320,8 @@ static bool buttons_context_path_modifier(ButsContextPath *path)
              OB_GREASE_PENCIL,
              OB_CURVES,
              OB_POINTCLOUD,
-             OB_VOLUME))
+             OB_VOLUME,
+             OB_CAD))
     {
       ModifierData *md = BKE_object_active_modifier(ob);
       if (md != nullptr) {
@@ -957,6 +961,7 @@ const char *buttons_context_dir[] = {
     "grease_pencil",
     "curves",
     "pointcloud",
+    "cad_part",
     "volume",
     "strip",
     "strip_modifier",
@@ -1055,6 +1060,10 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   }
   if (CTX_data_equals(member, "pointcloud")) {
     set_pointer_type(path, result, RNA_PointCloud);
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "cad_part")) {
+    set_pointer_type(path, result, RNA_CADPart);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "volume")) {

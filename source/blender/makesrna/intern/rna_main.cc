@@ -243,6 +243,7 @@ RNA_MAIN_LISTBASE_FUNCS_DEF(paintcurves)
 RNA_MAIN_LISTBASE_FUNCS_DEF(palettes)
 RNA_MAIN_LISTBASE_FUNCS_DEF(particles)
 RNA_MAIN_LISTBASE_FUNCS_DEF(pointclouds)
+RNA_MAIN_LISTBASE_FUNCS_DEF(cad_parts)
 RNA_MAIN_LISTBASE_FUNCS_DEF(scenes)
 RNA_MAIN_LISTBASE_FUNCS_DEF(screens)
 RNA_MAIN_LISTBASE_FUNCS_DEF(shapekeys)
@@ -635,6 +636,12 @@ void RNA_def_main(BlenderRNA *brna)
        "Point Clouds",
        "Point cloud data-blocks",
        RNA_def_main_pointclouds},
+      {"cad_parts",
+       "CADPart",
+       "rna_Main_cad_parts_begin",
+       "CAD Parts",
+       "Parametric CAD part data-blocks",
+       RNA_def_main_cad_parts},
       {"volumes",
        "Volume",
        "rna_Main_volumes_begin",

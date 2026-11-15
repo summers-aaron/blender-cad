@@ -275,6 +275,8 @@ DEF_ENUM(rna_enum_asset_import_method_items)
 
 DEF_ENUM(rna_enum_pointcloud_type_items)
 
+DEF_ENUM(rna_enum_cad_feature_type_items)
+
 DEF_ENUM(rna_enum_project_variable_type_items)
 DEF_ENUM(rna_enum_project_variable_string_subtype_items)
 

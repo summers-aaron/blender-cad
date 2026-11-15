@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "DNA_cad_types.h"
+
 #include "BKE_paint.hh"
 #include "DNA_volume_types.h"
 
@@ -115,6 +117,17 @@ class Wireframe : Overlay {
     }
   }
 
+  static bool is_cad_part_with_edges(const ObjectRef &ob_ref)
+  {
+    const Object *parent = ob_ref.dupli_parent();
+    if (parent == nullptr || parent->type != OB_CAD || parent->data == nullptr ||
+        ob_ref.object->type != OB_MESH)
+    {
+      return false;
+    }
+    return (id_cast<const CADPart *>(parent->data)->flag & CAD_PART_HIDE_EDGES) == 0;
+  }
+
   void object_sync_ex(Manager &manager,
                       const ObjectRef &ob_ref,
                       Resources &res,
@@ -130,9 +143,12 @@ class Wireframe : Overlay {
       return;
     }
 
-    const bool all_edges = (ob_ref.object->dtx & OB_DRAW_ALL_EDGES) != 0;
+    /* SimpleCAD: the mesh of a CAD part always shows the edges of the solid. Only B-rep edges
+     * are display edges of that mesh, so draw all of them, whatever the wireframe threshold. */
+    const bool is_cad_edges = is_cad_part_with_edges(ob_ref);
+    const bool all_edges = (ob_ref.object->dtx & OB_DRAW_ALL_EDGES) != 0 || is_cad_edges;
     const bool show_surface_wire = show_wire_ || (ob_ref.object->dtx & OB_DRAWWIRE) ||
-                                   (ob_ref.object->dt == OB_WIRE);
+                                   (ob_ref.object->dt == OB_WIRE) || is_cad_edges;
 
     ColoringPass &coloring = in_edit_paint_mode ? non_colored : colored;
     switch (ob_ref.object->type) {

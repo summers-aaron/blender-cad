@@ -32,6 +32,7 @@
 #include "io_obj.hh"
 #include "io_ply_ops.hh"
 #include "io_spz_ops.hh"
+#include "io_step_ops.hh"
 #include "io_stl_ops.hh"
 
 namespace blender {
@@ -77,6 +78,9 @@ void ED_operatortypes_io()
   WM_operatortype_append(WM_OT_ply_import);
   ed::io::ply_file_handler_add();
 #endif
+
+  WM_operatortype_append(WM_OT_step_export);
+  ed::io::step_file_handler_add();
 
 #ifdef WITH_IO_STL
   WM_operatortype_append(WM_OT_stl_import);

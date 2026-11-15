@@ -16,6 +16,10 @@ add_subdirectory(sky)
 
 add_subdirectory(openvdb)
 
+if(WITH_CAD)
+  add_subdirectory(cad_kernel)
+endif()
+
 if(WITH_MOD_REMESH)
   add_subdirectory(dualcon)
 endif()

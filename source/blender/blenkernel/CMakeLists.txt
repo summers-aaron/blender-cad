@@ -260,6 +260,8 @@ set(SRC
   intern/pbvh_uv_islands.cc
   intern/pointcache.cc
   intern/pointcloud.cc
+  intern/cad.cc
+  intern/cad_eval.cc
   intern/pointcloud_attributes.cc
   intern/pose_backup.cc
   intern/preferences.cc
@@ -508,6 +510,7 @@ set(SRC
   BKE_path_templates.hh
   BKE_pointcache.h
   BKE_pointcloud.hh
+  BKE_cad.hh
   BKE_pose.hh
   BKE_pose_backup.h
   BKE_preferences.h
@@ -827,4 +830,9 @@ if(WITH_GTESTS)
     bf_rna  # RNA_prototypes.hh
   )
   blender_add_test_suite_lib(blenkernel "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${TEST_LIB}")
+endif()
+
+if(WITH_CAD)
+  target_compile_definitions(bf_blenkernel PRIVATE WITH_CAD)
+  target_link_libraries(bf_blenkernel PRIVATE bf::cad)
 endif()

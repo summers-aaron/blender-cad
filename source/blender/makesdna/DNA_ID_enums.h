@@ -173,6 +173,7 @@ enum ID_Type : uint16_t {
   ID_PT = MAKE_ID2('P', 'T'),        /* PointCloud */
   ID_VO = MAKE_ID2('V', 'O'),        /* Volume */
   ID_GP = MAKE_ID2('G', 'P'),        /* Grease Pencil */
+  ID_CAD = MAKE_ID2('C', 'D'),       /* CADPart */
 };
 
 /* Only used as 'placeholder' in .blend files for directly linked data-blocks. */

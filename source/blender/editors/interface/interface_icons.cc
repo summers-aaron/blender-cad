@@ -2145,6 +2145,8 @@ int icon_from_idcode(const int idcode)
       return ICON_CURVES_DATA;
     case ID_PT:
       return ICON_POINTCLOUD_DATA;
+    case ID_CAD:
+      return ICON_MESH_CUBE;
     case ID_VO:
       return ICON_VOLUME_DATA;
     case ID_WO:
@@ -2224,6 +2226,8 @@ int icon_from_object_type(const Object *object)
       return ICON_OUTLINER_OB_CURVES;
     case OB_POINTCLOUD:
       return ICON_OUTLINER_OB_POINTCLOUD;
+    case OB_CAD:
+      return ICON_MESH_CUBE;
     case OB_VOLUME:
       return ICON_OUTLINER_OB_VOLUME;
     case OB_EMPTY:

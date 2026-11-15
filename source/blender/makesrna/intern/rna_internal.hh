@@ -204,6 +204,7 @@ void RNA_def_packedfile(BlenderRNA *brna);
 void RNA_def_palette(BlenderRNA *brna);
 void RNA_def_particle(BlenderRNA *brna);
 void RNA_def_pointcloud(BlenderRNA *brna);
+void RNA_def_cad(BlenderRNA *brna);
 void RNA_def_pose(BlenderRNA *brna);
 void RNA_def_profile(BlenderRNA *brna);
 void RNA_def_lightprobe(BlenderRNA *brna);
@@ -567,6 +568,7 @@ void RNA_def_main_workspaces(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_lightprobes(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_hair_curves(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_pointclouds(BlenderRNA *brna, PropertyRNA *cprop);
+void RNA_def_main_cad_parts(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_volumes(BlenderRNA *brna, PropertyRNA *cprop);
 
 /* ID Properties */

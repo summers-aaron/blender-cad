@@ -123,6 +123,9 @@ enum ObjectType : short {
 
   OB_GREASE_PENCIL = 30,
 
+  /** Parametric CAD part (#CADPart data). */
+  OB_CAD = 31,
+
   /* Keep last. */
   OB_TYPE_MAX,
 };
@@ -713,7 +716,7 @@ struct ObHook {
 /* check if the object type supports materials */
 #define OB_TYPE_SUPPORT_MATERIAL(_type) \
   (((_type) >= OB_MESH && (_type) <= OB_MBALL) || \
-   ((_type) >= OB_CURVES && (_type) <= OB_GREASE_PENCIL))
+   ((_type) >= OB_CURVES && (_type) <= OB_CAD))
 
 /**
  * Does the object have some render-able geometry (unlike empties, cameras, etc.). True for
@@ -729,7 +732,8 @@ struct ObHook {
         OB_CURVES, \
         OB_POINTCLOUD, \
         OB_VOLUME, \
-        OB_GREASE_PENCIL))
+        OB_GREASE_PENCIL, \
+        OB_CAD))
 
 #define OB_TYPE_SUPPORT_VGROUP(_type) (ELEM(_type, OB_MESH, OB_LATTICE, OB_GREASE_PENCIL))
 
@@ -769,7 +773,8 @@ struct ObHook {
         ID_CV, \
         ID_PT, \
         ID_VO, \
-        ID_GP))
+        ID_GP, \
+        ID_CAD))
 
 #define OB_DATA_SUPPORT_ID_CASE \
   ID_ME: \
@@ -785,6 +790,7 @@ struct ObHook {
   case ID_CV: \
   case ID_PT: \
   case ID_VO: \
-  case ID_GP
+  case ID_GP: \
+  case ID_CAD
 
 }  // namespace blender
