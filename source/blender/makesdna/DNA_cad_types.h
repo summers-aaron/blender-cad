@@ -90,6 +90,12 @@ enum eCADConstraintType : short {
   CAD_CONSTRAINT_ANGLE = 37,
 };
 
+/** #CADParamExpr::flag, #CADUserParam::flag */
+enum eCADExprFlag : int {
+  /** The expression could not be evaluated; the value is the last good one. */
+  CAD_EXPR_ERROR = 1 << 0,
+};
+
 /** #CADTopoRef::flag */
 enum eCADTopoRefFlag : int {
   /** The last evaluation could not find the element by name. */
@@ -118,6 +124,8 @@ enum eCADConstraintFlag : short {
   CAD_CONSTRAINT_REDUNDANT = 1 << 1,
   /** Refers to missing entities or entities of the wrong kind; ignored. */
   CAD_CONSTRAINT_MALFORMED = 1 << 2,
+  /** #CADSketchConstraint.expression could not be evaluated. */
+  CAD_CONSTRAINT_EXPR_ERROR = 1 << 3,
   /** Selected in sketch mode (dimension labels, constraint glyphs). */
   CAD_CONSTRAINT_SELECT = 1 << 8,
 };
@@ -138,6 +146,8 @@ enum eCADPartFlag : int {
    * step or file load keeps the state saved when the mode was entered.
    */
   CAD_PART_SKETCH_EDITING = 1 << 1,
+  /** The feature in the dialog (#CADPart.dialog_uid) was created by it: Cancel removes it. */
+  CAD_PART_DIALOG_NEW = 1 << 2,
 };
 
 /** \} */
@@ -189,7 +199,7 @@ struct CADSketchConstraint {
   int entities[4] = {-1, -1, -1, -1};
   /** Dimension value (Blender units or radians). */
   double value = 0.0;
-  /** Optional expression driving the value. */
+  /** Expression driving the value when it uses part parameters, else null. */
   char *expression = nullptr;
   void *_pad_ptr = nullptr;
   /** Where the dimension label sits, relative to its default position (plane units). */
@@ -215,6 +225,17 @@ struct CADSketch {
   char _pad = 0;
 };
 
+/** Expression bound to a numeric feature parameter (an input). */
+struct CADParamExpr {
+  /** Parameter name in #CADFeature.params. */
+  char key[64] = "";
+  char *expression = nullptr;
+  void *_pad_ptr = nullptr;
+  /** #eCADExprFlag. */
+  int flag = 0;
+  int _pad = 0;
+};
+
 struct CADFeature {
   struct CADFeature *next = nullptr, *prev = nullptr;
   char name[64] = "";
@@ -232,6 +253,10 @@ struct CADFeature {
   int _pad = 0;
   /** Only for #CAD_FEATURE_SKETCH. */
   CADSketch *sketch = nullptr;
+  /** Inputs driven by expressions that use part parameters. */
+  CADParamExpr *exprs = nullptr;
+  int exprs_num = 0;
+  int _pad1 = 0;
 };
 
 /** A named part parameter usable in expressions. */
@@ -241,7 +266,9 @@ struct CADUserParam {
   double value = 0.0;
   /** #eCADParamUnit. */
   int unit = CAD_UNIT_LENGTH;
+  /** #eCADExprFlag. */
   int flag = 0;
+  /** What the user entered ("20 mm", "width / 2"), null when only the value is set. */
   char *expression = nullptr;
   void *_pad_ptr = nullptr;
 };
@@ -260,7 +287,11 @@ struct CADPart {
   ListBaseT<CADFeature> features = {nullptr, nullptr};
 
   CADUserParam *user_params = nullptr;
-  void *_pad_ptr = nullptr;
+  /**
+   * The feature open in a feature dialog as it was before the dialog changed it (null when the
+   * dialog made the feature). Cancel restores it.
+   */
+  CADFeature *dialog_backup = nullptr;
   int user_params_num = 0;
 
   /** #eCADKernel. */
@@ -277,7 +308,15 @@ struct CADPart {
   int flag = 0;
   /** Fork-local format version for versioning without upstream file subversions. */
   int format_version = 1;
-  int _pad1 = 0;
+  /**
+   * Feature edited in a feature dialog, -1 when none. Its changes are previewed live and
+   * become one undo step when the dialog is confirmed.
+   */
+  int dialog_uid = -1;
+  /** #rollback_uid before the dialog opened. */
+  int dialog_prev_rollback_uid = -1;
+  /** Active item in the parameters list. */
+  int active_param_index = 0;
 
   /** Millimeters per Blender unit, fixed when the part is created. */
   double mm_per_unit = 1000.0;

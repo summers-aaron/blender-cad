@@ -1140,6 +1140,9 @@ static const char *toolsystem_default_tool(const bToolKey *tkey)
           return "builtin.select_text";
         case CTX_MODE_EDIT_GREASE_PENCIL:
           return "builtin.select_lasso";
+        case CTX_MODE_EDIT_CAD:
+          /* SimpleCAD sketch mode. */
+          return "cad.sketch_select";
       }
       break;
     case SPACE_IMAGE:

@@ -42,6 +42,7 @@
 
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
+#include "ED_undo.hh"
 #include "ED_view3d.hh"
 
 #include "GPU_immediate.hh"
@@ -319,7 +320,7 @@ static CADFeature *edge_ref_feature(bContext *C, Object **r_ob)
 }
 
 /** The largest 3D view of the screen, for operators started from another editor. */
-static ScrArea *largest_view3d(bContext *C)
+ScrArea *largest_view3d(bContext *C)
 {
   bScreen *screen = CTX_wm_screen(C);
   if (screen == nullptr) {
@@ -410,6 +411,10 @@ static wmOperatorStatus reference_toggle_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
   toggle_edge_ref(ob, feature, *pick);
+  /* In a feature dialog, the dialog makes the undo step. */
+  if (BKE_cad_dialog_feature(id_cast<CADPart *>(ob->data)) == nullptr) {
+    ED_undo_push(C, op->type->name);
+  }
   return OPERATOR_FINISHED;
 }
 
@@ -431,7 +436,8 @@ void CAD_OT_reference_toggle(wmOperatorType *ot)
   ot->exec = reference_toggle_exec;
   ot->poll = edge_ref_poll;
 
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+  /* Undo is pushed by exec, except in feature dialogs. */
+  ot->flag = OPTYPE_REGISTER;
 
   RNA_def_int_array(ot->srna,
                     "location",
@@ -507,6 +513,10 @@ static void pick_refs_exit(bContext *C, wmOperator *op, const bool cancel)
   part->rollback_uid = data->rollback_uid_orig;
   DEG_id_tag_update(&part->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, part);
+  /* In a feature dialog, the dialog makes the undo step. */
+  if (!cancel && BKE_cad_dialog_feature(part) == nullptr) {
+    ED_undo_push(C, "Select Edges");
+  }
 
   ED_region_draw_cb_exit(data->region->runtime->type, data->draw_handle);
   ED_region_tag_redraw(data->region);
@@ -634,7 +644,8 @@ void CAD_OT_references_pick(wmOperatorType *ot)
   ot->cancel = pick_refs_cancel;
   ot->poll = edge_ref_poll_any_area;
 
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
+  /* Undo is pushed on exit, except in feature dialogs. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_BLOCKING;
 }
 
 /** \} */

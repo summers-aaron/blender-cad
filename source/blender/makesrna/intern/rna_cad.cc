@@ -54,6 +54,13 @@ static const EnumPropertyItem rna_enum_cad_sketch_curve_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+static const EnumPropertyItem rna_enum_cad_param_unit_items[] = {
+    {CAD_UNIT_LENGTH, "LENGTH", 0, "Length", "Millimeters unless another unit is given"},
+    {CAD_UNIT_ANGLE, "ANGLE", 0, "Angle", "Degrees unless another unit is given"},
+    {CAD_UNIT_NONE, "NONE", 0, "Number", "Plain number"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static const EnumPropertyItem rna_enum_cad_constraint_type_items[] = {
     {CAD_CONSTRAINT_COINCIDENT, "COINCIDENT", 0, "Coincident", ""},
     {CAD_CONSTRAINT_HORIZONTAL, "HORIZONTAL", 0, "Horizontal", ""},
@@ -202,6 +209,7 @@ static float rna_CADSketchConstraint_length_get(PointerRNA *ptr)
 static void rna_CADSketchConstraint_length_set(PointerRNA *ptr, const float value)
 {
   CADSketchConstraint *c = ptr->data_as<CADSketchConstraint>();
+  MEM_SAFE_DELETE(c->expression);
   /* Signed offsets keep their direction. */
   c->value = (c->value < 0.0 && ELEM(c->type, CAD_CONSTRAINT_DISTANCE_X, CAD_CONSTRAINT_DISTANCE_Y)) ?
                  -double(value) :
@@ -215,7 +223,9 @@ static float rna_CADSketchConstraint_angle_get(PointerRNA *ptr)
 
 static void rna_CADSketchConstraint_angle_set(PointerRNA *ptr, const float value)
 {
-  ptr->data_as<CADSketchConstraint>()->value = double(value);
+  CADSketchConstraint *c = ptr->data_as<CADSketchConstraint>();
+  MEM_SAFE_DELETE(c->expression);
+  c->value = double(value);
 }
 
 static void rna_CADPart_rollback_feature_set(PointerRNA *ptr,
@@ -554,6 +564,390 @@ static int rna_CADSketch_constraint_add(
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Feature Inputs
+ * \{ */
+
+/** The feature whose parameters contain the input `ptr` (an IDProperty). */
+static CADFeature *rna_cad_input_feature(const PointerRNA *ptr)
+{
+  CADPart *part = rna_cad_part(ptr);
+  const IDProperty *prop = ptr->data_as<IDProperty>();
+  for (CADFeature &feature : part->features) {
+    if (feature.params && BLI_findindex(&feature.params->data.group, prop) != -1) {
+      return &feature;
+    }
+  }
+  return nullptr;
+}
+
+static bool rna_cad_input_skip(CollectionPropertyIterator * /*iter*/, void *data)
+{
+  return !BKE_cad_feature_param_is_input(static_cast<const IDProperty *>(data));
+}
+
+static void rna_CADFeature_inputs_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+  CADFeature *feature = ptr->data_as<CADFeature>();
+  rna_iterator_listbase_begin(iter,
+                              ptr,
+                              feature->params ? &feature->params->data.group : nullptr,
+                              rna_cad_input_skip);
+}
+
+static void rna_CADFeatureInput_identifier_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value, ptr->data_as<IDProperty>()->name);
+}
+
+static int rna_CADFeatureInput_identifier_length(PointerRNA *ptr)
+{
+  return int(strlen(ptr->data_as<IDProperty>()->name));
+}
+
+/** "distance2" -> "Distance 2", "draft_angle" -> "Draft Angle". */
+static std::string rna_cad_input_label(const char *key)
+{
+  std::string label;
+  bool word_start = true;
+  for (const char *c = key; *c; c++) {
+    if (*c == '_') {
+      label += ' ';
+      word_start = true;
+      continue;
+    }
+    if (*c >= '0' && *c <= '9' && !label.empty() && !(label.back() >= '0' && label.back() <= '9') &&
+        label.back() != ' ')
+    {
+      label += ' ';
+    }
+    label += word_start && *c >= 'a' && *c <= 'z' ? char(*c - 'a' + 'A') : *c;
+    word_start = false;
+  }
+  return label;
+}
+
+static void rna_CADFeatureInput_name_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value, rna_cad_input_label(ptr->data_as<IDProperty>()->name).c_str());
+}
+
+static int rna_CADFeatureInput_name_length(PointerRNA *ptr)
+{
+  return int(rna_cad_input_label(ptr->data_as<IDProperty>()->name).size());
+}
+
+static void rna_CADFeatureInput_description_get(PointerRNA *ptr, char *value)
+{
+  const IDProperty *prop = ptr->data_as<IDProperty>();
+  strcpy(value, (prop->ui_data && prop->ui_data->description) ? prop->ui_data->description : "");
+}
+
+static int rna_CADFeatureInput_description_length(PointerRNA *ptr)
+{
+  const IDProperty *prop = ptr->data_as<IDProperty>();
+  return (prop->ui_data && prop->ui_data->description) ? int(strlen(prop->ui_data->description)) :
+                                                         0;
+}
+
+static std::string rna_cad_input_text(PointerRNA *ptr)
+{
+  const CADFeature *feature = rna_cad_input_feature(ptr);
+  return feature ? BKE_cad_feature_input_text(
+                       rna_cad_part(ptr), feature, ptr->data_as<IDProperty>()->name) :
+                   std::string();
+}
+
+static void rna_CADFeatureInput_expression_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value, rna_cad_input_text(ptr).c_str());
+}
+
+static int rna_CADFeatureInput_expression_length(PointerRNA *ptr)
+{
+  return int(rna_cad_input_text(ptr).size());
+}
+
+static void rna_CADFeatureInput_expression_set(PointerRNA *ptr, const char *value)
+{
+  CADFeature *feature = rna_cad_input_feature(ptr);
+  if (feature == nullptr) {
+    return;
+  }
+  const IDProperty *prop = ptr->data_as<IDProperty>();
+  std::string error;
+  if (!BKE_cad_feature_input_set(rna_cad_part(ptr), feature, prop->name, value, &error)) {
+    WM_global_reportf(RPT_ERROR, "%s: %s", rna_cad_input_label(prop->name).c_str(), error.c_str());
+  }
+}
+
+static float rna_CADFeatureInput_value_get(PointerRNA *ptr)
+{
+  const IDProperty *prop = ptr->data_as<IDProperty>();
+  return prop->type == IDP_DOUBLE ? float(IDP_double_get(prop)) : IDP_float_get(prop);
+}
+
+static void rna_CADFeatureInput_value_set(PointerRNA *ptr, const float value)
+{
+  if (CADFeature *feature = rna_cad_input_feature(ptr)) {
+    BKE_cad_feature_input_value_set(feature, ptr->data_as<IDProperty>()->name, value);
+  }
+}
+
+static std::string rna_cad_input_value_text(PointerRNA *ptr)
+{
+  const IDProperty *prop = ptr->data_as<IDProperty>();
+  const double value = prop->type == IDP_DOUBLE ? IDP_double_get(prop) : IDP_float_get(prop);
+  return BKE_cad_value_format(rna_cad_part(ptr), value, BKE_cad_feature_param_unit(prop));
+}
+
+static void rna_CADFeatureInput_value_text_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value, rna_cad_input_value_text(ptr).c_str());
+}
+
+static int rna_CADFeatureInput_value_text_length(PointerRNA *ptr)
+{
+  return int(rna_cad_input_value_text(ptr).size());
+}
+
+static int rna_CADFeatureInput_unit_get(PointerRNA *ptr)
+{
+  return BKE_cad_feature_param_unit(ptr->data_as<IDProperty>());
+}
+
+static const CADParamExpr *rna_cad_input_expr(PointerRNA *ptr)
+{
+  const CADFeature *feature = rna_cad_input_feature(ptr);
+  return feature ? BKE_cad_feature_expression_find(feature, ptr->data_as<IDProperty>()->name) :
+                   nullptr;
+}
+
+static bool rna_CADFeatureInput_is_expression_get(PointerRNA *ptr)
+{
+  return rna_cad_input_expr(ptr) != nullptr;
+}
+
+static bool rna_CADFeatureInput_has_error_get(PointerRNA *ptr)
+{
+  const CADParamExpr *expr = rna_cad_input_expr(ptr);
+  return expr && (expr->flag & CAD_EXPR_ERROR);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Feature Dialog
+ * \{ */
+
+static PointerRNA rna_CADPart_dialog_feature_get(PointerRNA *ptr)
+{
+  return RNA_pointer_create_with_parent(
+      *ptr, RNA_CADFeatureDialog, BKE_cad_dialog_feature(rna_cad_part(ptr)));
+}
+
+static bool rna_CADFeatureDialog_is_new_get(PointerRNA *ptr)
+{
+  return (rna_cad_part(ptr)->flag & CAD_PART_DIALOG_NEW) != 0;
+}
+
+static PointerRNA rna_CADFeatureDialog_feature_get(PointerRNA *ptr)
+{
+  return RNA_pointer_create_with_parent(*ptr, RNA_CADFeature, ptr->data);
+}
+
+static int rna_CADFeatureDialog_profile_get(PointerRNA *ptr)
+{
+  return BKE_cad_feature_param_get_int(ptr->data_as<CADFeature>(), "sketch", -1);
+}
+
+static void rna_CADFeatureDialog_profile_set(PointerRNA *ptr, const int value)
+{
+  BKE_cad_feature_param_set_int(ptr->data_as<CADFeature>(), "sketch", value);
+}
+
+static const EnumPropertyItem *rna_CADFeatureDialog_profile_itemf(bContext * /*C*/,
+                                                                  PointerRNA *ptr,
+                                                                  PropertyRNA * /*prop*/,
+                                                                  bool *r_free)
+{
+  EnumPropertyItem *items = nullptr;
+  int items_num = 0;
+  EnumPropertyItem none = {-1, "NONE", ICON_NONE, "None", "No profile"};
+  RNA_enum_item_add(&items, &items_num, &none);
+  if (const CADFeature *feature = ptr->data_as<CADFeature>()) {
+    /* Sketches before the feature. */
+    for (const CADFeature *f = feature->prev; f; f = f->prev) {
+      if (f->type == CAD_FEATURE_SKETCH) {
+        EnumPropertyItem item = {f->uid, f->name, ICON_GREASEPENCIL, f->name, ""};
+        RNA_enum_item_add(&items, &items_num, &item);
+      }
+    }
+  }
+  RNA_enum_item_end(&items, &items_num);
+  *r_free = true;
+  return items;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name User Parameters
+ * \{ */
+
+static int rna_cad_param_index(const PointerRNA *ptr)
+{
+  const CADPart *part = rna_cad_part(ptr);
+  return int(ptr->data_as<CADUserParam>() - part->user_params);
+}
+
+static std::optional<std::string> rna_CADUserParam_path(const PointerRNA *ptr)
+{
+  return fmt::format("parameters[{}]", rna_cad_param_index(ptr));
+}
+
+static void rna_CADUserParam_name_set(PointerRNA *ptr, const char *value)
+{
+  if (!BKE_cad_param_rename(rna_cad_part(ptr), rna_cad_param_index(ptr), value)) {
+    WM_global_reportf(RPT_ERROR,
+                      "\"%s\" cannot name a parameter: use letters, digits and underscores, not "
+                      "starting with a digit, and no unit or function names",
+                      value);
+  }
+}
+
+static void rna_CADUserParam_expression_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value, BKE_cad_param_text(rna_cad_part(ptr), rna_cad_param_index(ptr)).c_str());
+}
+
+static int rna_CADUserParam_expression_length(PointerRNA *ptr)
+{
+  return int(BKE_cad_param_text(rna_cad_part(ptr), rna_cad_param_index(ptr)).size());
+}
+
+static void rna_CADUserParam_expression_set(PointerRNA *ptr, const char *value)
+{
+  std::string error;
+  if (!BKE_cad_param_expression_set(rna_cad_part(ptr), rna_cad_param_index(ptr), value, &error)) {
+    WM_global_reportf(
+        RPT_ERROR, "%s: %s", ptr->data_as<CADUserParam>()->name, error.c_str());
+  }
+}
+
+static void rna_CADUserParam_value_text_get(PointerRNA *ptr, char *value)
+{
+  const CADUserParam *param = ptr->data_as<CADUserParam>();
+  strcpy(value,
+         BKE_cad_value_format(rna_cad_part(ptr), param->value, eCADParamUnit(param->unit))
+             .c_str());
+}
+
+static int rna_CADUserParam_value_text_length(PointerRNA *ptr)
+{
+  const CADUserParam *param = ptr->data_as<CADUserParam>();
+  return int(
+      BKE_cad_value_format(rna_cad_part(ptr), param->value, eCADParamUnit(param->unit)).size());
+}
+
+static void rna_CADUserParam_update_values(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+{
+  CADPart *part = rna_cad_part(ptr);
+  BKE_cad_expressions_update(part);
+  rna_cad_tag(&part->id);
+}
+
+static void rna_CADPart_parameters_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+  CADPart *part = rna_cad_part(ptr);
+  rna_iterator_array_begin(iter,
+                           ptr,
+                           part->user_params,
+                           sizeof(CADUserParam),
+                           part->user_params_num,
+                           false,
+                           nullptr);
+}
+
+static int rna_CADPart_parameters_length(PointerRNA *ptr)
+{
+  return rna_cad_part(ptr)->user_params_num;
+}
+
+static void rna_CADPart_active_param_index_range(
+    PointerRNA *ptr, int *min, int *max, int * /*softmin*/, int * /*softmax*/)
+{
+  *min = 0;
+  *max = std::max(0, rna_cad_part(ptr)->user_params_num - 1);
+}
+
+static PointerRNA rna_CADParameters_new(ID *id,
+                                        CADPart *part,
+                                        ReportList *reports,
+                                        const char *name,
+                                        const char *expression,
+                                        const int unit)
+{
+  if (!BKE_cad_param_name_is_valid(name)) {
+    BKE_reportf(reports, RPT_ERROR, "\"%s\" cannot name a parameter", name);
+    return PointerRNA();
+  }
+  CADUserParam *param = BKE_cad_param_add(part, name, eCADParamUnit(unit), expression);
+  if (param->flag & CAD_EXPR_ERROR) {
+    BKE_reportf(reports, RPT_WARNING, "Expression of \"%s\" cannot be evaluated", param->name);
+  }
+  rna_cad_tag(id);
+  return RNA_pointer_create_discrete(id, RNA_CADUserParam, param);
+}
+
+static void rna_CADParameters_remove(ID *id,
+                                     CADPart *part,
+                                     ReportList *reports,
+                                     PointerRNA *param_ptr)
+{
+  const CADUserParam *param = param_ptr->data_as<CADUserParam>();
+  const int index = int(param - part->user_params);
+  if (index < 0 || index >= part->user_params_num) {
+    BKE_report(reports, RPT_ERROR, "Parameter not found in part");
+    return;
+  }
+  BKE_cad_param_remove(part, index);
+  param_ptr->invalidate();
+  rna_cad_tag(id);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Dimension Expressions
+ * \{ */
+
+static void rna_CADSketchConstraint_expression_get(PointerRNA *ptr, char *value)
+{
+  strcpy(value,
+         BKE_cad_constraint_input_text(rna_cad_part(ptr), ptr->data_as<CADSketchConstraint>())
+             .c_str());
+}
+
+static int rna_CADSketchConstraint_expression_length(PointerRNA *ptr)
+{
+  return int(
+      BKE_cad_constraint_input_text(rna_cad_part(ptr), ptr->data_as<CADSketchConstraint>())
+          .size());
+}
+
+static void rna_CADSketchConstraint_expression_set(PointerRNA *ptr, const char *value)
+{
+  std::string error;
+  if (!BKE_cad_constraint_input_set(
+          rna_cad_part(ptr), ptr->data_as<CADSketchConstraint>(), value, &error))
+  {
+    WM_global_reportf(RPT_ERROR, "Dimension: %s", error.c_str());
+  }
+}
+
+/** \} */
+
 }  // namespace blender
 
 #else
@@ -701,6 +1095,23 @@ static void rna_def_cad_sketch_elements(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Angle", "Value of an angle dimension");
   RNA_def_property_update(prop, 0, "rna_CADSketchConstraint_update_value");
 
+  prop = RNA_def_property(srna, "expression", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CADSketchConstraint_expression_get",
+                                "rna_CADSketchConstraint_expression_length",
+                                "rna_CADSketchConstraint_expression_set");
+  RNA_def_property_ui_text(
+      prop,
+      "Expression",
+      "Value as text (\"12 mm\"); expressions using part parameters (\"width / 2\") stay "
+      "bound to them");
+  RNA_def_property_update(prop, 0, "rna_CADSketchConstraint_update_value");
+
+  prop = RNA_def_property(srna, "has_expression_error", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_CONSTRAINT_EXPR_ERROR);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Expression Error", "The expression cannot be evaluated");
+
   prop = RNA_def_property(srna, "is_conflicting", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_CONSTRAINT_CONFLICTING);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -844,6 +1255,8 @@ static void rna_def_cad_sketch(BlenderRNA *brna)
   RNA_def_function_return(func, RNA_def_int(func, "uid", 0, INT_MIN, INT_MAX, "", "", 0, 0));
 }
 
+static void rna_def_cad_inputs_collection(StructRNA *srna, const char *item_type);
+
 static void rna_def_cad_feature(BlenderRNA *brna)
 {
   StructRNA *srna = RNA_def_struct(brna, "CADFeature", nullptr);
@@ -917,6 +1330,8 @@ static void rna_def_cad_feature(BlenderRNA *brna)
                                     nullptr);
   RNA_def_property_ui_text(prop, "References", "Faces or edges this feature works on");
 
+  rna_def_cad_inputs_collection(srna, "CADFeatureInput");
+
   FunctionRNA *func;
   PropertyRNA *parm;
 
@@ -948,6 +1363,259 @@ static void rna_def_cad_feature(BlenderRNA *brna)
       func, "regions", 1, nullptr, INT_MIN, INT_MAX, "Regions", "", INT_MIN, INT_MAX);
   RNA_def_property_flag(parm, PROP_DYNAMIC);
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+}
+
+/** Inputs of features: the feature list edits them with undo, the feature dialog without. */
+static void rna_def_cad_input(BlenderRNA *brna, const char *identifier, const bool undo)
+{
+  StructRNA *srna = RNA_def_struct(brna, identifier, nullptr);
+  RNA_def_struct_sdna(srna, "IDProperty");
+  if (!undo) {
+    RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
+  }
+  RNA_def_struct_ui_text(srna,
+                         "CAD Feature Input",
+                         "Numeric feature parameter, set from a value or an expression");
+
+  PropertyRNA *prop = RNA_def_property(srna, "identifier", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CADFeatureInput_identifier_get",
+                                "rna_CADFeatureInput_identifier_length",
+                                nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Identifier", "Name of the feature parameter");
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(
+      prop, "rna_CADFeatureInput_name_get", "rna_CADFeatureInput_name_length", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Name", "Label for the UI");
+
+  prop = RNA_def_property(srna, "description", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CADFeatureInput_description_get",
+                                "rna_CADFeatureInput_description_length",
+                                nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Description", "");
+
+  prop = RNA_def_property(srna, "expression", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CADFeatureInput_expression_get",
+                                "rna_CADFeatureInput_expression_length",
+                                "rna_CADFeatureInput_expression_set");
+  RNA_def_property_ui_text(
+      prop,
+      "Expression",
+      "Value as text (\"12 mm\", \"1 in\"); expressions using part parameters (\"width / 2\") "
+      "stay bound to them");
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+
+  prop = RNA_def_property(srna, "value", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_funcs(
+      prop, "rna_CADFeatureInput_value_get", "rna_CADFeatureInput_value_set", nullptr);
+  RNA_def_property_ui_text(prop,
+                           "Value",
+                           "Value in Blender units (lengths) or radians (angles); setting it "
+                           "removes the expression");
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+
+  prop = RNA_def_property(srna, "value_text", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CADFeatureInput_value_text_get",
+                                "rna_CADFeatureInput_value_text_length",
+                                nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Value Text", "Value with units");
+
+  prop = RNA_def_property(srna, "unit", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_cad_param_unit_items);
+  RNA_def_property_enum_funcs(prop, "rna_CADFeatureInput_unit_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Unit", "");
+
+  prop = RNA_def_property(srna, "is_expression", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_CADFeatureInput_is_expression_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Is Expression", "The value comes from part parameters");
+
+  prop = RNA_def_property(srna, "has_error", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_CADFeatureInput_has_error_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Error", "The expression cannot be evaluated; the last good value is used");
+}
+
+static void rna_def_cad_inputs_collection(StructRNA *srna, const char *item_type)
+{
+  PropertyRNA *prop = RNA_def_property(srna, "inputs", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, item_type);
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_CADFeature_inputs_begin",
+                                    "rna_iterator_listbase_next",
+                                    "rna_iterator_listbase_end",
+                                    "rna_iterator_listbase_get",
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr);
+  RNA_def_property_ui_text(prop, "Inputs", "Numeric parameters that take expressions");
+}
+
+static void rna_def_cad_feature_dialog(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "CADFeatureDialog", nullptr);
+  RNA_def_struct_sdna(srna, "CADFeature");
+  /* Dialog edits are previewed live; confirming the dialog makes the undo step. */
+  RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
+  RNA_def_struct_ui_text(
+      srna, "CAD Feature Dialog", "Feature open in a feature dialog (edits make no undo steps)");
+  RNA_def_struct_idprops_func(srna, "rna_CADFeature_idprops");
+
+  PropertyRNA *prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_CADFeature_name_set");
+  RNA_def_property_ui_text(prop, "Name", "");
+  RNA_def_struct_name_property(srna, prop);
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_ui");
+
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_cad_feature_type_items);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Type", "");
+
+  prop = RNA_def_property(srna, "uid", PROP_INT, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "UID", "");
+
+  prop = RNA_def_property(srna, "is_new", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_CADFeatureDialog_is_new_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "New", "The dialog creates the feature (Cancel removes it)");
+
+  prop = RNA_def_property(srna, "feature", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CADFeature");
+  RNA_def_property_pointer_funcs(prop, "rna_CADFeatureDialog_feature_get", nullptr, nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Feature", "The feature in the timeline");
+
+  prop = RNA_def_property(srna, "status", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_cad_feature_status_items);
+  RNA_def_property_enum_funcs(prop, "rna_CADFeature_status_get", nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Status", "Result of the last evaluation");
+
+  prop = RNA_def_property(srna, "status_message", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(
+      prop, "rna_CADFeature_status_message_get", "rna_CADFeature_status_message_length", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Status Message", "");
+
+  prop = RNA_def_property(srna, "profile", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_dummy_DEFAULT_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_CADFeatureDialog_profile_get",
+                              "rna_CADFeatureDialog_profile_set",
+                              "rna_CADFeatureDialog_profile_itemf");
+  RNA_def_property_ui_text(prop, "Profile", "Sketch to extrude");
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+
+  prop = RNA_def_property(srna, "references", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CADTopoRef");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_CADFeature_refs_begin",
+                                    "rna_iterator_array_next",
+                                    "rna_iterator_array_end",
+                                    "rna_iterator_array_get",
+                                    "rna_CADFeature_refs_length",
+                                    nullptr,
+                                    nullptr,
+                                    nullptr);
+  RNA_def_property_ui_text(prop, "References", "Faces or edges the feature works on");
+
+  rna_def_cad_inputs_collection(srna, "CADFeatureDialogInput");
+}
+
+static void rna_def_cad_user_param(BlenderRNA *brna)
+{
+  StructRNA *srna = RNA_def_struct(brna, "CADUserParam", nullptr);
+  RNA_def_struct_ui_text(
+      srna, "CAD Parameter", "Named value of a part that expressions can use (\"width / 2\")");
+  RNA_def_struct_path_func(srna, "rna_CADUserParam_path");
+
+  PropertyRNA *prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_CADUserParam_name_set");
+  RNA_def_property_ui_text(
+      prop, "Name", "Name used in expressions; renaming updates the expressions using it");
+  RNA_def_struct_name_property(srna, prop);
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+
+  prop = RNA_def_property(srna, "expression", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(prop,
+                                "rna_CADUserParam_expression_get",
+                                "rna_CADUserParam_expression_length",
+                                "rna_CADUserParam_expression_set");
+  RNA_def_property_ui_text(
+      prop, "Expression", "Value with units (\"20 mm\") or an expression of other parameters");
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_data");
+
+  prop = RNA_def_property(srna, "value", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "value");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Value", "Evaluated value in Blender units (lengths) or radians (angles)");
+
+  prop = RNA_def_property(srna, "value_text", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_funcs(
+      prop, "rna_CADUserParam_value_text_get", "rna_CADUserParam_value_text_length", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Value Text", "Evaluated value with units");
+
+  prop = RNA_def_property(srna, "unit", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "unit");
+  RNA_def_property_enum_items(prop, rna_enum_cad_param_unit_items);
+  RNA_def_property_ui_text(prop, "Unit", "Kind of value");
+  RNA_def_property_update(prop, 0, "rna_CADUserParam_update_values");
+
+  prop = RNA_def_property(srna, "has_error", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAD_EXPR_ERROR);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop, "Error", "The expression cannot be evaluated; the last good value is used");
+}
+
+static void rna_def_cad_parameters(BlenderRNA *brna, PropertyRNA *cprop)
+{
+  RNA_def_property_srna(cprop, "CADParameters");
+  StructRNA *srna = RNA_def_struct(brna, "CADParameters", nullptr);
+  RNA_def_struct_sdna(srna, "CADPart");
+  RNA_def_struct_ui_text(srna, "CAD Parameters", "User parameters of a CAD part");
+
+  FunctionRNA *func = RNA_def_function(srna, "new", "rna_CADParameters_new");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(func, "Add a parameter (made unique when the name is taken)");
+  PropertyRNA *parm = RNA_def_string(func, "name", nullptr, 64, "Name", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  RNA_def_string(func, "expression", nullptr, 0, "Expression", "Value or expression");
+  RNA_def_enum(func, "unit", rna_enum_cad_param_unit_items, CAD_UNIT_LENGTH, "Unit", "");
+  parm = RNA_def_pointer(func, "parameter", "CADUserParam", "", "New parameter");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_RNAPTR);
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "remove", "rna_CADParameters_remove");
+  RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(
+      func, "Remove a parameter (expressions using it keep their last values)");
+  parm = RNA_def_pointer(func, "parameter", "CADUserParam", "", "Parameter to remove");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
+
+  PropertyRNA *prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "active_param_index");
+  RNA_def_property_int_funcs(prop, nullptr, nullptr, "rna_CADPart_active_param_index_range");
+  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
+  RNA_def_property_ui_text(prop, "Active Parameter Index", "");
+  RNA_def_property_update(prop, 0, "rna_CADPart_update_ui");
 }
 
 static void rna_def_cad_features(BlenderRNA *brna, PropertyRNA *cprop)
@@ -1005,6 +1673,30 @@ static void rna_def_cad_part(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "CADFeature");
   RNA_def_property_ui_text(prop, "Features", "Feature history, in evaluation order");
   rna_def_cad_features(brna, prop);
+
+  prop = RNA_def_property(srna, "parameters", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CADUserParam");
+  RNA_def_property_collection_funcs(prop,
+                                    "rna_CADPart_parameters_begin",
+                                    "rna_iterator_array_next",
+                                    "rna_iterator_array_end",
+                                    "rna_iterator_array_get",
+                                    "rna_CADPart_parameters_length",
+                                    nullptr,
+                                    nullptr,
+                                    nullptr);
+  RNA_def_property_ui_text(
+      prop, "Parameters", "Named values that feature inputs and dimensions can use");
+  rna_def_cad_parameters(brna, prop);
+
+  prop = RNA_def_property(srna, "dialog_feature", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "CADFeatureDialog");
+  RNA_def_property_pointer_funcs(prop, "rna_CADPart_dialog_feature_get", nullptr, nullptr, nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Dialog Feature",
+                           "Feature open in a feature dialog (its edits are previewed and become "
+                           "one undo step on OK)");
 
   prop = RNA_def_property(srna, "kernel", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_cad_kernel_items);
@@ -1078,7 +1770,11 @@ void RNA_def_cad(BlenderRNA *brna)
   rna_def_cad_topo_ref(brna);
   rna_def_cad_sketch_elements(brna);
   rna_def_cad_sketch(brna);
+  rna_def_cad_input(brna, "CADFeatureInput", true);
+  rna_def_cad_input(brna, "CADFeatureDialogInput", false);
   rna_def_cad_feature(brna);
+  rna_def_cad_feature_dialog(brna);
+  rna_def_cad_user_param(brna);
   rna_def_cad_part(brna);
 }
 

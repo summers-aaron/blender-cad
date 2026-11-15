@@ -11,6 +11,7 @@
 #pragma once
 
 namespace blender {
+struct bContext;
 struct Main;
 struct UndoType;
 struct wmKeyConfig;
@@ -32,6 +33,12 @@ void gizmotypes_cad();
  */
 bool sketch_edit_enter(Main *bmain, Scene *scene, Object *ob);
 void sketch_edit_exit(Main *bmain, Object *ob);
+
+/**
+ * Undo while a feature dialog is open cancels the dialog instead (its changes are not undo
+ * steps). Returns true when a dialog was cancelled.
+ */
+bool dialog_cancel_for_undo(bContext *C);
 
 /** Undo for sketch mode (edit modes do not use memfile undo). */
 void undosys_type_register(UndoType *ut);

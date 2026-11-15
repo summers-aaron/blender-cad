@@ -24,6 +24,7 @@
 namespace blender {
 
 struct Depsgraph;
+struct IDProperty;
 struct Main;
 struct Mesh;
 struct Object;
@@ -85,6 +86,14 @@ struct CADPartRuntime {
   MEM_CXX_CLASS_ALLOC_FUNCS("CADPartRuntime");
 };
 
+/** Result of evaluating an expression for a part (see #BKE_cad_expression_eval). */
+struct CADExprEval {
+  bool ok = false;
+  /** Blender units for lengths, radians for angles. */
+  double value = 0.0;
+  std::string error;
+};
+
 /** Attribute names of the mesh a part evaluates to. */
 inline constexpr StringRef CAD_ATTR_FACE = "cad_face";
 inline constexpr StringRef CAD_ATTR_EDGE = "cad_edge";
@@ -115,6 +124,28 @@ float3 BKE_cad_feature_param_get_float3(const CADFeature *feature,
                                         const float3 &fallback);
 void BKE_cad_feature_param_set(CADFeature *feature, StringRef key, double value);
 void BKE_cad_feature_param_set_int(CADFeature *feature, StringRef key, int value);
+
+/**
+ * Inputs are the numeric (float) parameters of a feature: they can be typed as expressions.
+ * The unit comes from the parameter's subtype (distance, angle).
+ */
+bool BKE_cad_feature_param_is_input(const IDProperty *prop);
+eCADParamUnit BKE_cad_feature_param_unit(const IDProperty *prop);
+/** The expression bound to an input, or null. */
+CADParamExpr *BKE_cad_feature_expression_find(const CADFeature *feature, StringRef key);
+/**
+ * Sets an input from text ("12 mm", "width / 2"). Text that uses part parameters is kept as the
+ * input's expression and evaluated again when they change; other text only sets the value.
+ * Returns false and changes nothing when the text cannot be evaluated.
+ */
+bool BKE_cad_feature_input_set(
+    CADPart *part, CADFeature *feature, StringRef key, StringRef text, std::string *r_error);
+/** Sets an input's value, removing an expression bound to it. */
+void BKE_cad_feature_input_value_set(CADFeature *feature, StringRef key, double value);
+/** The input as text: its expression, or the value with units ("12.5 mm"). */
+std::string BKE_cad_feature_input_text(const CADPart *part,
+                                       const CADFeature *feature,
+                                       StringRef key);
 
 /** Adds an edge / face reference. */
 void BKE_cad_feature_ref_add(CADFeature *feature, StringRef name, const double3 &point);
@@ -178,6 +209,74 @@ bool BKE_cad_sketch_remove(CADSketch *sketch, Span<int> uids);
 
 /** Selection of all points, curves and constraints. */
 bool BKE_cad_sketch_select_all(CADSketch *sketch, bool select);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Feature Dialog
+ *
+ * A feature dialog edits one feature (new or existing) with a live preview. Its changes are not
+ * undo steps of their own: confirming the dialog makes one undo step, cancelling restores the
+ * feature (or removes a new one). Editing an existing feature rolls the timeline back to it.
+ * \{ */
+
+/** The feature in the open dialog, or null. */
+CADFeature *BKE_cad_dialog_feature(const CADPart *part);
+/** Opens the dialog; there must be no open dialog. */
+void BKE_cad_dialog_begin(CADPart *part, CADFeature *feature, bool is_new);
+/** Closes the dialog, keeping the changes (`apply`) or reverting them. */
+void BKE_cad_dialog_end(CADPart *part, bool apply);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Parameters and Expressions
+ *
+ * Expressions such as "width / 2 + 3 mm" drive feature inputs, sketch dimensions and other
+ * user parameters. Bare numbers are millimeters (lengths) or degrees (angles).
+ * \{ */
+
+/** Evaluates an expression with the part's user parameters. */
+bke::CADExprEval BKE_cad_expression_eval(const CADPart *part,
+                                         StringRef expression,
+                                         eCADParamUnit unit);
+/** Whether the expression uses any of the part's user parameters. */
+bool BKE_cad_expression_uses_params(const CADPart *part, StringRef expression);
+/** A value (Blender units / radians) as expression text in document units: "12.5 mm". */
+std::string BKE_cad_value_format(const CADPart *part, double value, eCADParamUnit unit);
+
+/** Sets a sketch dimension from text, see #BKE_cad_feature_input_set. Does not solve. */
+bool BKE_cad_constraint_input_set(CADPart *part,
+                                  CADSketchConstraint *constraint,
+                                  StringRef text,
+                                  std::string *r_error);
+std::string BKE_cad_constraint_input_text(const CADPart *part,
+                                          const CADSketchConstraint *constraint);
+
+int BKE_cad_param_find(const CADPart *part, StringRef name);
+/** Identifiers that are not functions, constants or units. */
+bool BKE_cad_param_name_is_valid(StringRef name);
+/** Adds a parameter with a unique name; `expression` may be empty. */
+CADUserParam *BKE_cad_param_add(CADPart *part,
+                                StringRef name,
+                                eCADParamUnit unit,
+                                StringRef expression);
+void BKE_cad_param_remove(CADPart *part, int index);
+/** Renames a parameter and the expressions that use it. False for invalid names. */
+bool BKE_cad_param_rename(CADPart *part, int index, StringRef name);
+/** Sets a parameter's expression; false for invalid text or cyclic dependencies. */
+bool BKE_cad_param_expression_set(CADPart *part,
+                                  int index,
+                                  StringRef text,
+                                  std::string *r_error);
+std::string BKE_cad_param_text(const CADPart *part, int index);
+
+/**
+ * Evaluates all expressions of the part in dependency order and stores their values. Sketches
+ * with changed dimensions are solved again. Expressions that fail keep their last value and get
+ * an error flag. Returns true when any value changed.
+ */
+bool BKE_cad_expressions_update(CADPart *part);
 
 /** \} */
 

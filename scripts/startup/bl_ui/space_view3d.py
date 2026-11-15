@@ -1276,6 +1276,8 @@ class VIEW3D_MT_editor_menus(Menu):
                 'PAINT_TEXTURE', 'SCULPT_CURVES', 'PAINT_GREASE_PENCIL', 'SCULPT_GREASE_PENCIL', 'VERTEX_GREASE_PENCIL'
             }:
                 layout.menu("VIEW3D_MT_" + mode_string.lower())
+            if mode_string == 'OBJECT' and obj.type == 'CAD':
+                layout.menu("VIEW3D_MT_cad_part")
             if mode_string == 'SCULPT':
                 layout.menu("VIEW3D_MT_mask")
                 layout.menu("VIEW3D_MT_face_sets")

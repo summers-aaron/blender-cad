@@ -2,10 +2,139 @@
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# 3D View UI for CAD parts in sketch mode (the edit mode of CAD parts).
+# 3D View UI for CAD parts: feature dialogs (object mode) and sketch mode (the edit mode of
+# CAD parts).
 
 import bpy
 from bpy.types import Menu, Panel
+
+
+_FEATURE_ICONS = {
+    'SKETCH': 'GREASEPENCIL',
+    'BOX': 'MESH_CUBE',
+    'EXTRUDE': 'MOD_SOLIDIFY',
+    'FILLET': 'MOD_BEVEL',
+    'CHAMFER': 'MOD_BEVEL',
+}
+
+
+def _cad_part(context):
+    ob = context.active_object
+    if ob is None or ob.type != 'CAD' or ob.data is None:
+        return None
+    return ob.data
+
+
+def draw_feature_input(layout, inp, text=None):
+    """An input as an expression field, with the value it evaluates to when it is bound."""
+    col = layout.column(align=True)
+    row = col.row(align=True)
+    row.alert = inp.has_error
+    row.prop(inp, "expression", text=inp.name if text is None else text,
+             icon='LINKED' if inp.is_expression else 'NONE')
+    if inp.is_expression:
+        split = col.split(factor=0.4)
+        split.label()
+        split.label(text="= " + inp.value_text)
+
+
+class VIEW3D_MT_cad_part(Menu):
+    bl_label = "Part"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("cad.feature_new", text="Extrude", icon='MOD_SOLIDIFY').type = 'EXTRUDE'
+        layout.operator("cad.feature_new", text="Fillet", icon='MOD_BEVEL').type = 'FILLET'
+        layout.operator("cad.feature_new", text="Chamfer", icon='MOD_BEVEL').type = 'CHAMFER'
+        layout.operator("cad.feature_new", text="Box", icon='MESH_CUBE').type = 'BOX'
+        layout.separator()
+        layout.operator_menu_enum("cad.sketch_add", "plane", text="New Sketch", icon='GREASEPENCIL')
+        layout.separator()
+        layout.operator("cad.feature_edit", text="Edit Active Feature")
+
+
+class VIEW3D_PT_cad_feature_dialog(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Feature"
+    # The header shows "New Extrude", "Edit Fillet1", ...
+    bl_label = ""
+
+    @classmethod
+    def poll(cls, context):
+        part = _cad_part(context)
+        return part is not None and part.dialog_feature is not None
+
+    def draw_header(self, context):
+        dialog = _cad_part(context).dialog_feature
+        type_name = bpy.types.CADFeature.bl_rna.properties["type"].enum_items[dialog.type].name
+        self.layout.label(text=("New " + type_name) if dialog.is_new else ("Edit " + dialog.name),
+                          icon=_FEATURE_ICONS.get(dialog.type, 'DOT'))
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        dialog = _cad_part(context).dialog_feature
+
+        layout.prop(dialog, "name")
+        if dialog.status in {'ERROR', 'WARNING'} and dialog.status_message:
+            box = layout.box()
+            box.alert = dialog.status == 'ERROR'
+            box.label(text=dialog.status_message, icon='ERROR' if dialog.status == 'WARNING' else 'CANCEL')
+
+        inputs = dialog.inputs
+        if dialog.type == 'EXTRUDE':
+            layout.prop(dialog, "profile")
+            layout.prop(dialog, '["extent"]', text="Extent")
+            draw_feature_input(layout, inputs["distance"])
+            if dialog.get("extent", 0) == 2:
+                draw_feature_input(layout, inputs["distance2"])
+            layout.prop(dialog, '["operation"]', text="Operation")
+        elif dialog.type in {'FILLET', 'CHAMFER'}:
+            count = len(dialog.references)
+            split = layout.split(factor=0.4)
+            split.alignment = 'RIGHT'
+            split.label(text="Edges")
+            split.operator("cad.references_pick",
+                           text="{:d} Selected".format(count) if count else "Select",
+                           icon='RESTRICT_SELECT_OFF')
+            for inp in inputs:
+                draw_feature_input(layout, inp)
+        elif dialog.type == 'BOX':
+            layout.prop(dialog, '["min"]', text="Corner")
+            layout.prop(dialog, '["size"]', text="Size")
+        else:
+            for inp in inputs:
+                draw_feature_input(layout, inp)
+
+        layout.separator()
+        row = layout.row(align=True)
+        row.scale_y = 1.3
+        row.operator("cad.dialog_ok", text="OK", icon='CHECKMARK')
+        row.operator("cad.dialog_cancel", text="Cancel", icon='X')
+
+
+class VIEW3D_PT_cad_feature_dialog_parameters(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Feature"
+    bl_label = "Parameters"
+    bl_parent_id = "VIEW3D_PT_cad_feature_dialog"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        return len(_cad_part(context).parameters) > 0
+
+    def draw(self, context):
+        # Read-only: parameters are edited in the Properties editor (with undo).
+        col = self.layout.column(align=True)
+        for param in _cad_part(context).parameters:
+            row = col.row()
+            row.alert = param.has_error
+            row.label(text=param.name)
+            row.label(text=param.value_text)
 
 
 def _edit_sketch(context):
@@ -119,14 +248,17 @@ class VIEW3D_PT_cad_sketch(Panel):
             col.label(text="Dimensions")
             for c in dims:
                 row = col.row(align=True)
-                row.alert = c.is_conflicting
-                row.prop(c, "angle" if c.type == 'ANGLE' else "length", text=c.type.replace("_", " ").title())
+                row.alert = c.is_conflicting or c.has_expression_error
+                row.prop(c, "expression", text=c.type.replace("_", " ").title())
 
         layout.separator()
         layout.operator("cad.sketch_finish", text="Finish Sketch", icon='CHECKMARK')
 
 
 classes = (
+    VIEW3D_MT_cad_part,
+    VIEW3D_PT_cad_feature_dialog,
+    VIEW3D_PT_cad_feature_dialog_parameters,
     VIEW3D_MT_select_edit_cad,
     CAD_MT_sketch_constrain,
     VIEW3D_MT_edit_cad,

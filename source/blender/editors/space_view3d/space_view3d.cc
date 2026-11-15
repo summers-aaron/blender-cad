@@ -410,6 +410,8 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
   /* SimpleCAD: CAD part sketch mode (the keymap's poll checks for sketch mode). */
   keymap = WM_keymap_ensure(wm->runtime->defaultconf, "CAD Sketch", SPACE_EMPTY, RGN_TYPE_WINDOW);
   WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
+  keymap = WM_keymap_ensure(wm->runtime->defaultconf, "CAD Part", SPACE_EMPTY, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
 
   keymap = WM_keymap_ensure(
       wm->runtime->defaultconf, "Sculpt Curves", SPACE_EMPTY, RGN_TYPE_WINDOW);

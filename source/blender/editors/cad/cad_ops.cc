@@ -46,8 +46,7 @@ namespace blender::ed::cad {
 /** \name Utilities
  * \{ */
 
-/** The part from the context: a pinned/context `cad_part`, else the active object's data. */
-static CADPart *context_part(const bContext *C)
+CADPart *context_part(const bContext *C)
 {
   PointerRNA ptr = CTX_data_pointer_get_type(C, "cad_part", RNA_CADPart);
   if (ptr.data) {
@@ -60,7 +59,7 @@ static CADPart *context_part(const bContext *C)
   return nullptr;
 }
 
-static bool part_editable_poll(bContext *C)
+bool part_editable_poll(bContext *C)
 {
   const CADPart *part = context_part(C);
   if (part == nullptr) {
@@ -86,7 +85,7 @@ static bool active_feature_poll(bContext *C)
   return true;
 }
 
-static void part_changed(bContext *C, CADPart *part)
+void part_changed(bContext *C, CADPart *part)
 {
   DEG_id_tag_update(&part->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, part);
@@ -163,16 +162,9 @@ void feature_insert_at_rollback(CADPart *part, CADFeature *feature)
 /** \name Add Feature
  * \{ */
 
-static wmOperatorStatus feature_add_exec(bContext *C, wmOperator *op)
+void feature_init_defaults(CADPart *part, CADFeature *feature, const CADFeature *prev_active)
 {
-  CADPart *part = context_part(C);
-  const eCADFeatureType type = eCADFeatureType(RNA_enum_get(op->ptr, "type"));
-  const CADFeature *prev_active = BKE_cad_feature_active(part);
-
-  CADFeature *feature = BKE_cad_feature_add(part, type);
-  feature_insert_at_rollback(part, feature);
-
-  if (type == CAD_FEATURE_EXTRUDE) {
+  if (feature->type == CAD_FEATURE_EXTRUDE) {
     /* Extrude the active sketch, else the closest sketch before it. */
     const CADFeature *sketch = (prev_active && prev_active->type == CAD_FEATURE_SKETCH &&
                                 BLI_findindex(&part->features, prev_active) <
@@ -196,6 +188,17 @@ static wmOperatorStatus feature_add_exec(bContext *C, wmOperator *op)
     /* Like other CAD tools: the first extrude makes a body, later ones join it. */
     BKE_cad_feature_param_set_int(feature, "operation", has_solid ? 1 : 0);
   }
+}
+
+static wmOperatorStatus feature_add_exec(bContext *C, wmOperator *op)
+{
+  CADPart *part = context_part(C);
+  const eCADFeatureType type = eCADFeatureType(RNA_enum_get(op->ptr, "type"));
+  const CADFeature *prev_active = BKE_cad_feature_active(part);
+
+  CADFeature *feature = BKE_cad_feature_add(part, type);
+  feature_insert_at_rollback(part, feature);
+  feature_init_defaults(part, feature, prev_active);
 
   char name[sizeof(CADFeature::name)];
   RNA_string_get(op->ptr, "name", name);
@@ -478,13 +481,94 @@ static void CAD_OT_rollback_set(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Parameters
+ * \{ */
+
+static const EnumPropertyItem param_unit_items[] = {
+    {CAD_UNIT_LENGTH, "LENGTH", 0, "Length", ""},
+    {CAD_UNIT_ANGLE, "ANGLE", 0, "Angle", ""},
+    {CAD_UNIT_NONE, "NONE", 0, "Number", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static wmOperatorStatus parameter_add_exec(bContext *C, wmOperator *op)
+{
+  CADPart *part = context_part(C);
+  const std::string name = RNA_string_get(op->ptr, "name");
+  const std::string expression = RNA_string_get(op->ptr, "expression");
+  const CADUserParam *param = BKE_cad_param_add(
+      part, name, eCADParamUnit(RNA_enum_get(op->ptr, "unit")), expression);
+  if (param->flag & CAD_EXPR_ERROR) {
+    BKE_reportf(op->reports, RPT_WARNING, "\"%s\" cannot be evaluated", expression.c_str());
+  }
+  part->active_param_index = int(param - part->user_params);
+  part_changed(C, part);
+  return OPERATOR_FINISHED;
+}
+
+static void CAD_OT_parameter_add(wmOperatorType *ot)
+{
+  ot->name = "Add Parameter";
+  ot->description = "Add a named value that feature inputs and dimensions can use";
+  ot->idname = "CAD_OT_parameter_add";
+
+  ot->exec = parameter_add_exec;
+  ot->poll = part_editable_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", "param", 64, "Name", "Made unique when taken");
+  RNA_def_string(ot->srna, "expression", "10 mm", 0, "Expression", "Value or expression");
+  RNA_def_enum(ot->srna, "unit", param_unit_items, CAD_UNIT_LENGTH, "Unit", "");
+}
+
+static wmOperatorStatus parameter_remove_exec(bContext *C, wmOperator *op)
+{
+  CADPart *part = context_part(C);
+  int index = RNA_int_get(op->ptr, "index");
+  if (index < 0) {
+    index = part->active_param_index;
+  }
+  if (index < 0 || index >= part->user_params_num) {
+    return OPERATOR_CANCELLED;
+  }
+  BKE_cad_param_remove(part, index);
+  part_changed(C, part);
+  return OPERATOR_FINISHED;
+}
+
+static void CAD_OT_parameter_remove(wmOperatorType *ot)
+{
+  ot->name = "Remove Parameter";
+  ot->description = "Remove a parameter; expressions using it keep their last values";
+  ot->idname = "CAD_OT_parameter_remove";
+
+  ot->exec = parameter_remove_exec;
+  ot->poll = part_editable_poll;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  PropertyRNA *prop = RNA_def_int(
+      ot->srna, "index", -1, -1, INT_MAX, "Index", "Parameter index (-1: active)", -1, INT_MAX);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
+/** \} */
+
 void operatortypes_cad()
 {
+  WM_operatortype_append(CAD_OT_parameter_add);
+  WM_operatortype_append(CAD_OT_parameter_remove);
   WM_operatortype_append(CAD_OT_feature_add);
   WM_operatortype_append(CAD_OT_feature_delete);
   WM_operatortype_append(CAD_OT_feature_move);
   WM_operatortype_append(CAD_OT_feature_suppress);
   WM_operatortype_append(CAD_OT_rollback_set);
+  WM_operatortype_append(CAD_OT_feature_new);
+  WM_operatortype_append(CAD_OT_feature_edit);
+  WM_operatortype_append(CAD_OT_dialog_ok);
+  WM_operatortype_append(CAD_OT_dialog_cancel);
   WM_operatortype_append(CAD_OT_reference_toggle);
   WM_operatortype_append(CAD_OT_references_pick);
 
@@ -510,11 +594,13 @@ void operatortypes_cad()
 void keymap_cad(wmKeyConfig *keyconf)
 {
   sketch_keymap(keyconf);
+  part_keymap(keyconf);
 }
 
 void gizmotypes_cad()
 {
   sketch_gizmos_register();
+  dialog_gizmos_register();
 }
 
 }  // namespace blender::ed::cad

@@ -58,6 +58,17 @@ class CAD_UL_features(UIList):
                  icon='HIDE_ON' if feature.suppress else 'HIDE_OFF')
 
 
+class CAD_UL_parameters(UIList):
+    def draw_item(self, _context, layout, _data, param, _icon, _active_data, _active_propname, _index):
+        row = layout.row(align=True)
+        row.alert = param.has_error
+        row.prop(param, "name", text="", emboss=False)
+        row.prop(param, "expression", text="")
+        sub = row.row()
+        sub.alignment = 'RIGHT'
+        sub.label(text=param.value_text)
+
+
 class DATA_PT_context_cad_part(DataButtonsPanel, Panel):
     bl_label = ""
     bl_options = {'HIDE_HEADER'}
@@ -96,7 +107,7 @@ class DATA_PT_cad_features(DataButtonsPanel, Panel):
         )
 
         col = row.column(align=True)
-        col.operator_menu_enum("cad.feature_add", "type", icon='ADD', text="")
+        col.operator_menu_enum("cad.feature_new", "type", icon='ADD', text="")
         col.operator_menu_enum("cad.sketch_add", "plane", icon='GREASEPENCIL', text="")
         col.operator("cad.feature_delete", icon='REMOVE', text="")
         col.separator()
@@ -139,13 +150,33 @@ class DATA_PT_cad_feature(DataButtonsPanel, Panel):
             box = layout.box()
             box.label(text=feature.status_message, icon=_STATUS_ICONS[feature.status])
 
+        dialog = part.dialog_feature
+        if dialog is not None and dialog.uid == feature.uid:
+            # The feature dialog in the 3D View owns the changes (one undo step on OK).
+            box = layout.box()
+            box.label(text="Being edited in the 3D View", icon='INFO')
+            row = box.row(align=True)
+            row.operator("cad.dialog_ok", text="OK", icon='CHECKMARK')
+            row.operator("cad.dialog_cancel", text="Cancel", icon='X')
+            return
+        if feature.type != 'SKETCH':
+            row = layout.row()
+            row.operator("cad.feature_edit", text="Edit in Dialog", icon='PREFERENCES').feature_uid = feature.uid
+
         if feature.type == 'EXTRUDE':
             sketch_uid = feature.get("sketch", -1)
             sketch = next((f for f in part.features if f.uid == sketch_uid), None)
             layout.label(text="Sketch: " + (sketch.name if sketch else "None"), icon='GREASEPENCIL')
 
+        inputs = feature.inputs
         for key in feature.keys():
             if key in _HIDDEN_PARAMS:
+                continue
+            inp = inputs.get(key)
+            if inp is not None:
+                # Numeric inputs take values with units or expressions of part parameters.
+                from bl_ui.space_view3d_cad import draw_feature_input
+                draw_feature_input(layout, inp)
                 continue
             layout.prop(feature, '["{:s}"]'.format(bpy.utils.escape_identifier(key)), text=key.replace("_", " ").title())
 
@@ -173,6 +204,31 @@ class DATA_PT_cad_feature(DataButtonsPanel, Panel):
             col.label(text="References")
             for ref in feature.references:
                 col.label(text=ref.name, icon='ERROR' if ref.is_lost else 'LINKED')
+
+
+class DATA_PT_cad_parameters(DataButtonsPanel, Panel):
+    bl_label = "Parameters"
+    COMPAT_ENGINES = _COMPAT_ENGINES
+
+    def draw(self, context):
+        layout = self.layout
+        part = context.cad_part
+
+        row = layout.row()
+        row.template_list(
+            "CAD_UL_parameters",
+            "",
+            part,
+            "parameters",
+            part.parameters,
+            "active_index",
+            rows=3,
+        )
+        col = row.column(align=True)
+        col.operator("cad.parameter_add", icon='ADD', text="")
+        col.operator("cad.parameter_remove", icon='REMOVE', text="")
+        if not part.parameters:
+            layout.label(text="Use parameters by name in inputs and dimensions: \"width / 2\"", icon='INFO')
 
 
 class DATA_PT_cad_part_settings(DataButtonsPanel, Panel):
@@ -203,9 +259,11 @@ class DATA_PT_custom_props_cad_part(DataButtonsPanel, PropertyPanel, Panel):
 
 classes = (
     CAD_UL_features,
+    CAD_UL_parameters,
     DATA_PT_context_cad_part,
     DATA_PT_cad_features,
     DATA_PT_cad_feature,
+    DATA_PT_cad_parameters,
     DATA_PT_cad_part_settings,
     DATA_PT_custom_props_cad_part,
 )

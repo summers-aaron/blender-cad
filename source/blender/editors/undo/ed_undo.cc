@@ -38,6 +38,7 @@
 #include "BLO_blend_validate.hh"
 
 #include "ED_asset.hh"
+#include "ED_cad.hh"
 #include "ED_gpencil_legacy.hh"
 #include "ED_object.hh"
 #include "ED_outliner.hh"
@@ -730,6 +731,10 @@ static wmOperatorStatus ed_undo_exec(bContext *C, wmOperator *op)
 {
   /* "last operator" should disappear, later we can tie this with undo stack nicer */
   WM_operator_stack_clear(CTX_wm_manager(C));
+  /* SimpleCAD: changes in a CAD feature dialog are not undo steps; undo cancels the dialog. */
+  if (ed::cad::dialog_cancel_for_undo(C)) {
+    return OPERATOR_FINISHED;
+  }
   wmOperatorStatus ret = ed_undo_step_direction(C, STEP_UNDO, op->reports);
   if (ret & OPERATOR_FINISHED) {
     ed_undo_refresh_for_op(C);
@@ -756,6 +761,7 @@ static wmOperatorStatus ed_undo_push_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus ed_redo_exec(bContext *C, wmOperator *op)
 {
+  ed::cad::dialog_cancel_for_undo(C);
   wmOperatorStatus ret = ed_undo_step_direction(C, STEP_REDO, op->reports);
   if (ret & OPERATOR_FINISHED) {
     ed_undo_refresh_for_op(C);
@@ -990,6 +996,7 @@ static wmOperatorStatus undo_history_exec(bContext *C, wmOperator *op)
   PropertyRNA *prop = RNA_struct_find_property(op->ptr, "item");
   if (RNA_property_is_set(op->ptr, prop)) {
     const int item = RNA_property_int_get(op->ptr, prop);
+    ed::cad::dialog_cancel_for_undo(C);
     const int ret = ed_undo_step_by_index(C, item, op->reports);
     if (ret & OPERATOR_FINISHED) {
       ed_undo_refresh_for_op(C);

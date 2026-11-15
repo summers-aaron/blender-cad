@@ -6217,6 +6217,27 @@ def km_cad_sketch(params):
     return keymap
 
 
+# CAD parts in object mode (SimpleCAD): feature dialogs and new features.
+def km_cad_part(_params):
+    items = []
+    keymap = (
+        "CAD Part",
+        {"space_type": 'EMPTY', "region_type": 'WINDOW'},
+        {"items": items},
+    )
+
+    items.extend([
+        # The operators only run while a feature dialog is open.
+        ("cad.dialog_ok", {"type": 'RET', "value": 'PRESS'}, None),
+        ("cad.dialog_ok", {"type": 'NUMPAD_ENTER', "value": 'PRESS'}, None),
+        ("cad.dialog_cancel", {"type": 'ESC', "value": 'PRESS'}, None),
+        ("cad.feature_new", {"type": 'E', "value": 'PRESS'},
+         {"properties": [("type", 'EXTRUDE')]}),
+    ])
+
+    return keymap
+
+
 # ------------------------------------------------------------------------------
 # Modal Maps and Gizmos
 
@@ -9238,6 +9259,7 @@ def generate_keymaps(params=None):
         km_edit_curves(params),
         km_edit_pointcloud(params),
         km_cad_sketch(params),
+        km_cad_part(params),
 
         # Modal maps.
         km_eyedropper_modal_map(params),

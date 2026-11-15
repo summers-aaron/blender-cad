@@ -14,6 +14,7 @@ set(INC_SYS
 )
 
 set(SRC
+  cad_dialog.cc
   cad_ops.cc
   cad_pick.cc
   cad_sketch_draw.cc

@@ -22,7 +22,9 @@ struct CADFeature;
 struct CADPart;
 struct Depsgraph;
 struct Object;
+struct ScrArea;
 struct View3D;
+struct wmKeyConfig;
 struct wmOperatorType;
 
 namespace ed::cad {
@@ -64,12 +66,35 @@ void draw_edge_highlights(const ARegion *region,
                           Span<std::string> selected_names,
                           const TopoPick *hover);
 
+/** The part from the context: a pinned/context `cad_part`, else the active object's data. */
+CADPart *context_part(const bContext *C);
+bool part_editable_poll(bContext *C);
+/** Tags the part for evaluation and redraw. */
+void part_changed(bContext *C, CADPart *part);
+/** The largest 3D view of the context's screen. */
+ScrArea *largest_view3d(bContext *C);
+
+/**
+ * Defaults of a new feature that depend on the timeline: an Extrude uses the active sketch
+ * (else the closest one before it) and joins an existing body.
+ */
+void feature_init_defaults(CADPart *part, CADFeature *feature, const CADFeature *prev_active);
+
 /** After #BKE_cad_feature_add: with a rollback marker, move the feature to the marker and the
  * marker to the feature, so it is built on the model as it is shown. */
 void feature_insert_at_rollback(CADPart *part, CADFeature *feature);
 
 void CAD_OT_reference_toggle(wmOperatorType *ot);
 void CAD_OT_references_pick(wmOperatorType *ot);
+
+/* Feature dialogs (cad_dialog.cc). */
+void CAD_OT_feature_new(wmOperatorType *ot);
+void CAD_OT_feature_edit(wmOperatorType *ot);
+void CAD_OT_dialog_ok(wmOperatorType *ot);
+void CAD_OT_dialog_cancel(wmOperatorType *ot);
+void dialog_gizmos_register();
+/** "CAD Part": object mode keys of CAD parts (feature dialogs, new features). */
+void part_keymap(wmKeyConfig *keyconf);
 
 }  // namespace ed::cad
 }  // namespace blender

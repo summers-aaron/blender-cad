@@ -11,6 +11,7 @@ Interactive test of sketch mode with simulated mouse and keyboard events. Needs 
 """
 
 import os
+import subprocess
 import sys
 
 import bpy
@@ -76,10 +77,23 @@ def key(k, **mods):
     ev(k, 'RELEASE', **mods)
 
 
+_DIGITS = ['ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE']
+
+
+def type_text(text):
+    """Types into the active text field (the dimension value popup starts editing)."""
+    for ch in text:
+        k = _DIGITS[int(ch)] if ch.isdigit() else {'.': 'PERIOD', ' ': 'SPACE'}.get(ch, ch.upper())
+        ev(k, 'PRESS', unicode=ch)
+        ev(k, 'RELEASE')
+
+
 def screenshot(name):
-    if OUT:
-        with override():
-            bpy.ops.screen.screenshot_area(filepath=os.path.join(OUT, name))
+    # Captures the (virtual) X screen: reading back Blender's window is black with Mesa
+    # llvmpipe on Xvfb. Needs ImageMagick's `import`.
+    if OUT and os.environ.get("DISPLAY"):
+        subprocess.run(["import", "-window", "root", "-display", os.environ["DISPLAY"],
+                        os.path.join(OUT, name)], check=False)
 
 
 def part():
@@ -194,13 +208,23 @@ def dimension_width_place():
 
 @step
 def dimension_width_set():
-    # The value popup is open; set the value like confirming it, then close the popup.
-    key('ESC')
+    # The value popup is open with its field active: type the value (bare numbers are mm) and
+    # confirm the text, then the popup.
+    type_text("500")
+    key('RET')
+
+
+@step
+def dimension_width_ok():
+    key('RET')
+
+
+@step
+def dimension_width_done():
     dims = [c for c in sketch().constraints if c.type == 'DISTANCE']
     check(len(dims) == 1, "width dimension added (%d)" % len(dims))
+    check(abs(dims[0].length - 0.5) < 1e-6, "typed width (%.4f)" % dims[0].length)
     state["width_uid"] = dims[0].uid
-    with override():
-        bpy.ops.cad.sketch_dimension_edit('EXEC_DEFAULT', True, constraint_uid=dims[0].uid, length=0.5)
 
 
 @step
@@ -221,11 +245,20 @@ def dimension_height_place():
 
 @step
 def dimension_height_set():
-    key('ESC')
+    type_text("300")
+    key('RET')
+
+
+@step
+def dimension_height_ok():
+    key('RET')
+
+
+@step
+def dimension_height_done():
     dims = [c for c in sketch().constraints if c.type == 'DISTANCE' and c.uid != state["width_uid"]]
     check(len(dims) == 1, "height dimension added")
-    with override():
-        bpy.ops.cad.sketch_dimension_edit('EXEC_DEFAULT', True, constraint_uid=dims[0].uid, length=0.3)
+    check(abs(dims[0].length - 0.3) < 1e-6, "typed height (%.4f)" % dims[0].length)
 
 
 @step
@@ -324,7 +357,8 @@ def diameter_place():
 
 @step
 def distance_start():
-    key('ESC')  # The value popup.
+    key('ESC')  # The value popup (text editing, then the popup).
+    key('ESC')
     check(any(c.type == 'DIAMETER' for c in sketch().constraints), "diameter dimension added")
     move((0.9, 0.2))
     key('D')
@@ -354,7 +388,8 @@ def distance_place():
 
 @step
 def distance_cancel_start():
-    key('ESC')  # The value popup.
+    key('ESC')  # The value popup (text editing, then the popup).
+    key('ESC')
     sk = sketch()
     check(len(sk.constraints) == state["constraints_before_dims"] + 2, "both dimensions kept")
     check(sk.dof == 1, "circle center has one degree of freedom left (%d)" % sk.dof)

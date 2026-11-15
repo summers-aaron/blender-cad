@@ -13,6 +13,8 @@
 #include <fmt/format.h>
 #include <numbers>
 
+#include "MEM_guardedalloc.h"
+
 #include "DNA_cad_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -22,6 +24,7 @@
 
 #include "BLI_math_vector.hh"
 #include "BLI_set.hh"
+#include "BLI_string.hh"
 
 #include "BKE_cad.hh"
 #include "BKE_context.hh"
@@ -1445,16 +1448,37 @@ static wmOperatorStatus dimension_edit_exec(bContext *C, wmOperator *op)
   }
   const bool is_angle = c->type == CAD_CONSTRAINT_ANGLE;
   const double old_value = c->value;
-  const double value = is_angle ? RNA_float_get(op->ptr, "angle") :
-                                  RNA_float_get(op->ptr, "length");
-  c->value = (c->type == CAD_CONSTRAINT_DISTANCE_X || c->type == CAD_CONSTRAINT_DISTANCE_Y) &&
-                     old_value < 0.0 ?
-                 -std::abs(value) :
-                 value;
+  const std::optional<std::string> old_expression = c->expression ?
+                                                        std::optional<std::string>(c->expression) :
+                                                        std::nullopt;
+  if (RNA_struct_property_is_set(op->ptr, "expression")) {
+    /* Text: a value with units or an expression of part parameters. */
+    std::string error;
+    if (!BKE_cad_constraint_input_set(
+            edit->part, c, RNA_string_get(op->ptr, "expression"), &error))
+    {
+      BKE_report(op->reports, RPT_ERROR, error.c_str());
+      return OPERATOR_CANCELLED;
+    }
+  }
+  else {
+    const double value = is_angle ? RNA_float_get(op->ptr, "angle") :
+                                    RNA_float_get(op->ptr, "length");
+    c->value = (c->type == CAD_CONSTRAINT_DISTANCE_X || c->type == CAD_CONSTRAINT_DISTANCE_Y) &&
+                       old_value < 0.0 ?
+                   -std::abs(value) :
+                   value;
+    MEM_SAFE_DELETE(c->expression);
+  }
   if (!BKE_cad_sketch_solve(edit->part, edit->sketch)) {
     /* Keep the sketch solvable: restore the old value. */
     c = dimension_from_op(C, op);
     c->value = old_value;
+    MEM_SAFE_DELETE(c->expression);
+    if (old_expression) {
+      c->expression = BLI_strdup(old_expression->c_str());
+    }
+    BKE_cad_sketch_solve(edit->part, edit->sketch);
     sketch_changed(C, *edit);
     BKE_report(op->reports, RPT_ERROR, "The sketch cannot take this value");
     return OPERATOR_CANCELLED;
@@ -1482,18 +1506,24 @@ static wmOperatorStatus dimension_edit_invoke(bContext *C, wmOperator *op, const
   }
   const bool is_angle = c->type == CAD_CONSTRAINT_ANGLE;
   RNA_float_set(op->ptr, is_angle ? "angle" : "length", float(is_angle ? c->value : std::abs(c->value)));
+  RNA_string_set(op->ptr,
+                 "expression",
+                 BKE_cad_constraint_input_text(sketch_edit_get(C)->part, c).c_str());
   return WM_operator_props_popup_confirm_ex(
       C, op, event, IFACE_("Dimension"), IFACE_("Set"));
 }
 
-static void dimension_edit_draw(bContext *C, wmOperator *op)
+static void dimension_edit_draw(bContext * /*C*/, wmOperator *op)
 {
-  CADSketchConstraint *c = dimension_from_op(C, op);
-  ui::Layout &layout = *op->layout;
-  layout.use_property_split_set(true);
-  layout.use_property_decorate_set(false);
-  const bool is_angle = c && c->type == CAD_CONSTRAINT_ANGLE;
-  layout.prop(op->ptr, is_angle ? "angle" : "length", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  /* Start editing the value right away, so it can be typed. Without property split: the flag
+   * does not reach the sub-layouts the split makes. */
+  ui::Layout &split = op->layout->split(0.3f, false);
+  ui::Layout &label = split.column(false);
+  label.alignment_set(ui::LayoutAlign::Right);
+  label.label(IFACE_("Value"), ICON_NONE);
+  ui::Layout &field = split.column(false);
+  field.activate_init_set(true);
+  field.prop(op->ptr, "expression", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 void CAD_OT_sketch_dimension_edit(wmOperatorType *ot)
@@ -1510,9 +1540,21 @@ void CAD_OT_sketch_dimension_edit(wmOperatorType *ot)
   PropertyRNA *prop = RNA_def_int(
       ot->srna, "constraint_uid", -1, -1, INT_MAX, "Dimension", "", -1, INT_MAX);
   RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
-  RNA_def_float_distance(ot->srna, "length", 0.0f, 0.0f, FLT_MAX, "Value", "", 0.0f, 100.0f);
+  /* For scripts; the popup edits the expression. */
+  prop = RNA_def_float_distance(
+      ot->srna, "length", 0.0f, 0.0f, FLT_MAX, "Length", "", 0.0f, 100.0f);
+  RNA_def_property_flag(prop, PROP_HIDDEN);
   prop = RNA_def_float_rotation(
-      ot->srna, "angle", 0, nullptr, -FLT_MAX, FLT_MAX, "Value", "", -FLT_MAX, FLT_MAX);
+      ot->srna, "angle", 0, nullptr, -FLT_MAX, FLT_MAX, "Angle", "", -FLT_MAX, FLT_MAX);
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+  ot->prop = RNA_def_string(ot->srna,
+                            "expression",
+                            nullptr,
+                            0,
+                            "Value",
+                            "Value with units (\"12 mm\") or an expression of part parameters "
+                            "(\"width / 2\"); used instead of Length / Angle when set");
+  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 }
 
 /** \} */

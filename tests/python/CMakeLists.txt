@@ -563,6 +563,11 @@ if(WITH_CAD)
       cad_part_ops_${_kernel}
       --python ${CMAKE_CURRENT_LIST_DIR}/cad_part_ops.py -- ${_kernel}
     )
+    # Rejected expressions are reported as errors.
+    add_blender_test_allow_error(
+      cad_part_dialog_${_kernel}
+      --python ${CMAKE_CURRENT_LIST_DIR}/cad_part_dialog.py -- ${_kernel}
+    )
   endforeach()
   add_blender_test(
     cad_ui_smoke
@@ -572,11 +577,15 @@ if(WITH_CAD)
   # Interactive picking with simulated events, in a virtual X display when available.
   find_program(XVFB_RUN_BIN xvfb-run)
   mark_as_advanced(XVFB_RUN_BIN)
+  # Blender tries Wayland first, and with WAYLAND_DISPLAY unset libwayland falls back to the
+  # default socket ("wayland-0"): the user's desktop. A socket name that does not exist makes
+  # Wayland fail, so Blender uses X11 on the virtual display of xvfb-run.
+  set(_cad_no_wayland "simplecad-tests-no-wayland")
   if(XVFB_RUN_BIN AND UNIX AND NOT APPLE)
     foreach(_kernel ${_cad_kernels})
       add_test(
         NAME cad_gui_pick_${_kernel}
-        COMMAND ${CMAKE_COMMAND} -E env --unset=WAYLAND_DISPLAY
+        COMMAND ${CMAKE_COMMAND} -E env WAYLAND_DISPLAY=${_cad_no_wayland}
                 ${XVFB_RUN_BIN} -a -s "-screen 0 1920x1080x24"
                 ${TEST_BLENDER_EXE} --factory-startup --enable-event-simulate
                 --window-geometry 0 0 1920 1080
@@ -584,10 +593,12 @@ if(WITH_CAD)
       )
       set_tests_properties(cad_gui_pick_${_kernel} PROPERTIES
         PASS_REGULAR_EXPRESSION "ALL OK \\(GUI pick\\)"
+        # Timed event steps: software rendering on Xvfb falls behind when several run at once.
+        RUN_SERIAL TRUE
       )
       add_test(
         NAME cad_gui_sketch_${_kernel}
-        COMMAND ${CMAKE_COMMAND} -E env --unset=WAYLAND_DISPLAY
+        COMMAND ${CMAKE_COMMAND} -E env WAYLAND_DISPLAY=${_cad_no_wayland}
                 ${XVFB_RUN_BIN} -a -s "-screen 0 1920x1080x24"
                 ${TEST_BLENDER_EXE} --factory-startup --enable-event-simulate
                 --window-geometry 0 0 1920 1080
@@ -595,6 +606,21 @@ if(WITH_CAD)
       )
       set_tests_properties(cad_gui_sketch_${_kernel} PROPERTIES
         PASS_REGULAR_EXPRESSION "ALL OK \\(GUI sketch\\)"
+        # Timed event steps: software rendering on Xvfb falls behind when several run at once.
+        RUN_SERIAL TRUE
+      )
+      add_test(
+        NAME cad_gui_dialog_${_kernel}
+        COMMAND ${CMAKE_COMMAND} -E env WAYLAND_DISPLAY=${_cad_no_wayland}
+                ${XVFB_RUN_BIN} -a -s "-screen 0 1920x1080x24"
+                ${TEST_BLENDER_EXE} --factory-startup --enable-event-simulate
+                --window-geometry 0 0 1920 1080
+                --python ${CMAKE_CURRENT_LIST_DIR}/cad_gui_dialog.py -- ${_kernel}
+      )
+      set_tests_properties(cad_gui_dialog_${_kernel} PROPERTIES
+        PASS_REGULAR_EXPRESSION "ALL OK \\(GUI dialog\\)"
+        # Timed event steps: software rendering on Xvfb falls behind when several run at once.
+        RUN_SERIAL TRUE
       )
     endforeach()
   endif()

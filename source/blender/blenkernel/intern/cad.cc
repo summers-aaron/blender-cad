@@ -117,6 +117,10 @@ static CADFeature *feature_copy(const CADFeature *src, const int flag)
     dst->refs[i].name = dup_string(src->refs[i].name);
   }
   dst->sketch = src->sketch ? sketch_copy(src->sketch) : nullptr;
+  dst->exprs = dup_array(src->exprs, src->exprs_num);
+  for (int i = 0; i < dst->exprs_num; i++) {
+    dst->exprs[i].expression = dup_string(src->exprs[i].expression);
+  }
   return dst;
 }
 
@@ -130,7 +134,62 @@ static void feature_free(CADFeature *feature)
   }
   MEM_SAFE_DELETE(feature->refs);
   sketch_free(feature->sketch);
+  for (int i = 0; i < feature->exprs_num; i++) {
+    MEM_SAFE_DELETE(feature->exprs[i].expression);
+  }
+  MEM_SAFE_DELETE(feature->exprs);
   MEM_delete(feature);
+}
+
+static void feature_blend_write(BlendWriter *writer, CADFeature *feature)
+{
+  if (feature->params) {
+    IDP_BlendWrite(writer, feature->params);
+  }
+  if (feature->refs) {
+    writer->write_struct_array(feature->refs_num, feature->refs);
+    for (int i = 0; i < feature->refs_num; i++) {
+      writer->write_string(feature->refs[i].name);
+    }
+  }
+  if (CADSketch *sketch = feature->sketch) {
+    writer->write_struct(sketch);
+    writer->write_struct_array(sketch->points_num, sketch->points);
+    writer->write_struct_array(sketch->curves_num, sketch->curves);
+    writer->write_struct_array(sketch->constraints_num, sketch->constraints);
+    for (int i = 0; i < sketch->constraints_num; i++) {
+      writer->write_string(sketch->constraints[i].expression);
+    }
+  }
+  if (feature->exprs) {
+    writer->write_struct_array(feature->exprs_num, feature->exprs);
+    for (int i = 0; i < feature->exprs_num; i++) {
+      writer->write_string(feature->exprs[i].expression);
+    }
+  }
+}
+
+static void feature_blend_read_data(BlendDataReader *reader, CADFeature *feature)
+{
+  BLO_read_struct(reader, IDProperty, &feature->params);
+  IDP_BlendDataRead(reader, &feature->params);
+  BLO_read_array_and_validate_size(reader, &feature->refs, &feature->refs_num);
+  for (int i = 0; i < feature->refs_num; i++) {
+    BLO_read_string(reader, &feature->refs[i].name);
+  }
+  BLO_read_struct(reader, CADSketch, &feature->sketch);
+  if (CADSketch *sketch = feature->sketch) {
+    BLO_read_array_and_validate_size(reader, &sketch->points, &sketch->points_num);
+    BLO_read_array_and_validate_size(reader, &sketch->curves, &sketch->curves_num);
+    BLO_read_array_and_validate_size(reader, &sketch->constraints, &sketch->constraints_num);
+    for (int i = 0; i < sketch->constraints_num; i++) {
+      BLO_read_string(reader, &sketch->constraints[i].expression);
+    }
+  }
+  BLO_read_array_and_validate_size(reader, &feature->exprs, &feature->exprs_num);
+  for (int i = 0; i < feature->exprs_num; i++) {
+    BLO_read_string(reader, &feature->exprs[i].expression);
+  }
 }
 
 /** \} */
@@ -165,6 +224,7 @@ static void cad_part_copy_data(Main * /*bmain*/,
     dst->user_params[i].expression = dup_string(src->user_params[i].expression);
   }
   dst->mat = MEM_dupalloc(src->mat);
+  dst->dialog_backup = src->dialog_backup ? feature_copy(src->dialog_backup, flag) : nullptr;
 
   dst->runtime = MEM_new<bke::CADPartRuntime>(__func__);
   /* Evaluated copies share the last result: cheap, and the UI keeps showing it. */
@@ -186,6 +246,10 @@ static void cad_part_free_data(ID *id)
   }
   MEM_SAFE_DELETE(part->user_params);
   part->user_params_num = 0;
+  if (part->dialog_backup) {
+    feature_free(part->dialog_backup);
+    part->dialog_backup = nullptr;
+  }
   MEM_SAFE_DELETE(part->mat);
   MEM_delete(part->runtime);
   part->runtime = nullptr;
@@ -208,25 +272,11 @@ static void cad_part_blend_write(BlendWriter *writer, ID *id, const void *id_add
 
   writer->write_struct_list(&part->features);
   for (CADFeature &feature_item : part->features) {
-    CADFeature *feature = &feature_item;
-    if (feature->params) {
-      IDP_BlendWrite(writer, feature->params);
-    }
-    if (feature->refs) {
-      writer->write_struct_array(feature->refs_num, feature->refs);
-      for (int i = 0; i < feature->refs_num; i++) {
-        writer->write_string(feature->refs[i].name);
-      }
-    }
-    if (CADSketch *sketch = feature->sketch) {
-      writer->write_struct(sketch);
-      writer->write_struct_array(sketch->points_num, sketch->points);
-      writer->write_struct_array(sketch->curves_num, sketch->curves);
-      writer->write_struct_array(sketch->constraints_num, sketch->constraints);
-      for (int i = 0; i < sketch->constraints_num; i++) {
-        writer->write_string(sketch->constraints[i].expression);
-      }
-    }
+    feature_blend_write(writer, &feature_item);
+  }
+  if (part->dialog_backup) {
+    writer->write_struct(part->dialog_backup);
+    feature_blend_write(writer, part->dialog_backup);
   }
   if (part->user_params) {
     writer->write_struct_array(part->user_params_num, part->user_params);
@@ -243,21 +293,21 @@ static void cad_part_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_struct_list(reader, CADFeature, &part->features);
   for (CADFeature &feature_item : part->features) {
-    CADFeature *feature = &feature_item;
-    BLO_read_struct(reader, IDProperty, &feature->params);
-    IDP_BlendDataRead(reader, &feature->params);
-    BLO_read_array_and_validate_size(reader, &feature->refs, &feature->refs_num);
-    for (int i = 0; i < feature->refs_num; i++) {
-      BLO_read_string(reader, &feature->refs[i].name);
-    }
-    BLO_read_struct(reader, CADSketch, &feature->sketch);
-    if (CADSketch *sketch = feature->sketch) {
-      BLO_read_array_and_validate_size(reader, &sketch->points, &sketch->points_num);
-      BLO_read_array_and_validate_size(reader, &sketch->curves, &sketch->curves_num);
-      BLO_read_array_and_validate_size(reader, &sketch->constraints, &sketch->constraints_num);
-      for (int i = 0; i < sketch->constraints_num; i++) {
-        BLO_read_string(reader, &sketch->constraints[i].expression);
-      }
+    feature_blend_read_data(reader, &feature_item);
+  }
+  BLO_read_struct(reader, CADFeature, &part->dialog_backup);
+  if (part->dialog_backup) {
+    part->dialog_backup->next = part->dialog_backup->prev = nullptr;
+    feature_blend_read_data(reader, part->dialog_backup);
+  }
+  /* Files from before feature dialogs have 0 here; a dialog can also outlive its feature in
+   * files written by scripts. */
+  if (BKE_cad_feature_find(part, part->dialog_uid) == nullptr) {
+    part->dialog_uid = -1;
+    part->flag &= ~CAD_PART_DIALOG_NEW;
+    if (part->dialog_backup) {
+      feature_free(part->dialog_backup);
+      part->dialog_backup = nullptr;
     }
   }
   BLO_read_array_and_validate_size(reader, &part->user_params, &part->user_params_num);
@@ -565,6 +615,15 @@ CADFeature *BKE_cad_feature_add(CADPart *part, const eCADFeatureType type)
 
 void BKE_cad_feature_remove(CADPart *part, CADFeature *feature)
 {
+  if (part->dialog_uid == feature->uid) {
+    /* Removing the feature ends its dialog. */
+    part->dialog_uid = -1;
+    part->flag &= ~CAD_PART_DIALOG_NEW;
+    if (part->dialog_backup) {
+      feature_free(part->dialog_backup);
+      part->dialog_backup = nullptr;
+    }
+  }
   BLI_remlink(&part->features, feature);
   if (part->active_feature_uid == feature->uid) {
     part->active_feature_uid = -1;
@@ -595,6 +654,75 @@ CADFeature *BKE_cad_feature_active(const CADPart *part)
 {
   return BKE_cad_feature_find(part, part->active_feature_uid);
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Feature Dialog
+ * \{ */
+
+CADFeature *BKE_cad_dialog_feature(const CADPart *part)
+{
+  return part->dialog_uid >= 0 ? BKE_cad_feature_find(part, part->dialog_uid) : nullptr;
+}
+
+void BKE_cad_dialog_begin(CADPart *part, CADFeature *feature, const bool is_new)
+{
+  BLI_assert(BKE_cad_dialog_feature(part) == nullptr);
+  if (part->dialog_backup) {
+    feature_free(part->dialog_backup);
+  }
+  part->dialog_uid = feature->uid;
+  part->dialog_prev_rollback_uid = part->rollback_uid;
+  SET_FLAG_FROM_TEST(part->flag, is_new, CAD_PART_DIALOG_NEW);
+  part->dialog_backup = is_new ? nullptr : feature_copy(feature, 0);
+  part->active_feature_uid = feature->uid;
+  if (!is_new) {
+    /* Show the model as this feature leaves it: later features are not built while editing. */
+    part->rollback_uid = feature->next ? feature->uid : -1;
+  }
+}
+
+void BKE_cad_dialog_end(CADPart *part, const bool apply)
+{
+  CADFeature *feature = BKE_cad_dialog_feature(part);
+  const bool is_new = (part->flag & CAD_PART_DIALOG_NEW) != 0;
+  CADFeature *backup = part->dialog_backup;
+  part->dialog_backup = nullptr;
+  part->dialog_uid = -1;
+  part->flag &= ~CAD_PART_DIALOG_NEW;
+
+  if (feature) {
+    if (!apply && is_new) {
+      BKE_cad_feature_remove(part, feature);
+      part->rollback_uid = part->dialog_prev_rollback_uid;
+    }
+    else {
+      if (!apply && backup) {
+        /* Restore the inputs; the feature keeps its place and uid. */
+        std::swap(feature->params, backup->params);
+        std::swap(feature->refs, backup->refs);
+        std::swap(feature->refs_num, backup->refs_num);
+        std::swap(feature->exprs, backup->exprs);
+        std::swap(feature->exprs_num, backup->exprs_num);
+        STRNCPY(feature->name, backup->name);
+        feature->flag = backup->flag;
+      }
+      if (!is_new) {
+        part->rollback_uid = part->dialog_prev_rollback_uid;
+      }
+    }
+  }
+  if (backup) {
+    feature_free(backup);
+  }
+  /* The marker may refer to a feature that is gone; on the last feature it means "no marker". */
+  const CADFeature *marker = BKE_cad_feature_find(part, part->rollback_uid);
+  if (marker == nullptr || marker->next == nullptr) {
+    part->rollback_uid = -1;
+  }
+  part->dialog_prev_rollback_uid = -1;
+}
+
+/** \} */
 
 void BKE_cad_feature_ref_add(CADFeature *feature, const StringRef name, const double3 &point)
 {

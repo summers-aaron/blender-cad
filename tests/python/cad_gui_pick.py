@@ -11,6 +11,7 @@ Interactive test of CAD edge picking with simulated mouse and keyboard events. N
 """
 
 import os
+import subprocess
 import sys
 
 import bpy
@@ -51,11 +52,11 @@ def click(co):
 
 
 def screenshot(name):
-    if not OUT:
-        return
-    win, area, region = v3d()
-    with bpy.context.temp_override(window=win, area=area, region=region):
-        bpy.ops.screen.screenshot_area(filepath=os.path.join(OUT, name))
+    # Captures the (virtual) X screen: reading back Blender's window is black with Mesa
+    # llvmpipe on Xvfb. Needs ImageMagick's `import`.
+    if OUT and os.environ.get("DISPLAY"):
+        subprocess.run(["import", "-window", "root", "-display", os.environ["DISPLAY"],
+                        os.path.join(OUT, name)], check=False)
 
 
 def check(cond, msg):
