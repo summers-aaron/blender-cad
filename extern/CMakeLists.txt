@@ -102,6 +102,13 @@ if(WITH_MOD_FLUID)
   add_subdirectory(mantaflow)
 endif()
 
+if(WITH_CAD)
+  add_subdirectory(planegcs)
+  if(WITH_CAD_SMLIB)
+    add_subdirectory(smlib)
+  endif()
+endif()
+
 if(WITH_VULKAN_BACKEND)
   add_subdirectory(vulkan_memory_allocator)
   add_subdirectory(volk)

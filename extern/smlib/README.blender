@@ -1,0 +1,10 @@
+Project: USD BRep (kernel layer only: SMLib + SM_API)
+URL: https://github.com/NVIDIA-Omniverse/usd-brep
+License: SPDX:Apache-2.0
+Upstream version: 1.0.1 (3fd5b95)
+Local modifications:
+- Only `source/SMLib` and `source/SM_API` are included (as `SMLib/` and `SM_API/`); the USD
+  schema, Hydra plugin, OCCT translators, Python bindings, tools and tests are not.
+- Upstream premake files removed; built by `CMakeLists.txt` in this directory instead.
+- No source changes.
+Copyright: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. See LICENSE and THIRD_PARTY_NOTICES.md.

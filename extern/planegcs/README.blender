@@ -1,0 +1,14 @@
+Project: FreeCAD PlaneGCS (Sketcher 2D geometric constraint solver)
+URL: https://github.com/FreeCAD/FreeCAD/tree/main/src/Mod/Sketcher/App/planegcs
+License: SPDX:LGPL-2.1-or-later
+Upstream version: d956ec561639cfa83f755504b1b3358ea799428e (2026-11-14)
+Local modifications:
+- Only `src/Mod/Sketcher/App/planegcs/*` is included, under `src/`.
+- `#include "../../SketcherGlobal.h"` -> `#include "planegcs_compat.h"` (empty export macro).
+- Boost removed: unused `<boost/math/constants/constants.hpp>` and
+  `<boost/graph/graph_concepts.hpp>` includes dropped; the `boost::adjacency_list` +
+  `boost::connected_components` partition in `GCS.cpp` replaced by
+  `compat/planegcs_union_find.h`, which keeps Boost's component numbering.
+- FreeCAD `Base/Console.h`, `Base/Tools.h` and `FCConfig.h` replaced by minimal shims in
+  `compat/` (console output only with the PLANEGCS_VERBOSE environment variable).
+Copyright: FreeCAD project contributors, see the file headers in src/.
