@@ -622,6 +622,19 @@ if(WITH_CAD)
         # Timed event steps: software rendering on Xvfb falls behind when several run at once.
         RUN_SERIAL TRUE
       )
+      add_test(
+        NAME cad_gui_history_${_kernel}
+        COMMAND ${CMAKE_COMMAND} -E env WAYLAND_DISPLAY=${_cad_no_wayland}
+                ${XVFB_RUN_BIN} -a -s "-screen 0 1920x1080x24"
+                ${TEST_BLENDER_EXE} --factory-startup --enable-event-simulate
+                --window-geometry 0 0 1920 1080
+                --python ${CMAKE_CURRENT_LIST_DIR}/cad_gui_history.py -- ${_kernel}
+      )
+      set_tests_properties(cad_gui_history_${_kernel} PROPERTIES
+        PASS_REGULAR_EXPRESSION "ALL OK \\(GUI history\\)"
+        # Timed event steps: software rendering on Xvfb falls behind when several run at once.
+        RUN_SERIAL TRUE
+      )
     endforeach()
   endif()
   unset(_cad_kernels)

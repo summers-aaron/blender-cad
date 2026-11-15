@@ -33,6 +33,7 @@
 #  include "DNA_space_types.h"
 
 #  include "ED_asset.hh"
+#  include "ED_cad.hh"
 #  include "ED_paint.hh"
 #  include "ED_sequencer.hh"
 
@@ -45,6 +46,18 @@ namespace blender {
 static void rna_window_update_all(Main * /*bmain*/, Scene * /*scene*/, PointerRNA * /*ptr*/)
 {
   WM_main_add_notifier(NC_WINDOW, nullptr);
+}
+
+/* SimpleCAD: turning the CAD shell on adds the regions it needs to the workspace's 3D views. */
+static bool rna_WorkSpace_use_cad_ui_get(PointerRNA *ptr)
+{
+  const WorkSpace *workspace = id_cast<const WorkSpace *>(ptr->owner_id);
+  return (workspace->flags & WORKSPACE_USE_CAD_UI) != 0;
+}
+
+static void rna_WorkSpace_use_cad_ui_set(PointerRNA *ptr, const bool value)
+{
+  ed::cad::workspace_cad_ui_set(id_cast<WorkSpace *>(ptr->owner_id), value);
 }
 
 void rna_workspace_screens_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -483,6 +496,13 @@ static void rna_def_workspace(BlenderRNA *brna)
   RNA_def_property_enum_items(prop, rna_enum_workspace_object_mode_items);
   RNA_def_property_ui_text(
       prop, "Object Mode", "Switch to this object mode when activating the workspace");
+
+  prop = RNA_def_property(srna, "use_cad_ui", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(
+      prop, "rna_WorkSpace_use_cad_ui_get", "rna_WorkSpace_use_cad_ui_set");
+  RNA_def_property_ui_text(
+      prop, "CAD", "Show the CAD shell (feature history) in the 3D views of this workspace");
+  RNA_def_property_update(prop, NC_SCREEN | ND_LAYOUTSET, "rna_window_update_all");
 
   prop = RNA_def_property(srna, "use_pin_scene", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flags", WORKSPACE_USE_PIN_SCENE);

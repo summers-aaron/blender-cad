@@ -86,6 +86,7 @@ set(LIB
   bf_editor_curves
   bf_editor_lattice
   bf_editor_mesh
+  bf_editor_cad
   PRIVATE bf::functions
   PRIVATE bf::gpu
   PRIVATE bf::imbuf

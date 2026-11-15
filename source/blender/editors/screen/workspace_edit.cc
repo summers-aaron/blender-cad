@@ -597,6 +597,8 @@ static void workspace_add_menu_draw(ui::Layout &layout)
   layout.separator();
 
   layout.menu_fn(IFACE_("General"), ICON_NONE, workspace_add_menu, nullptr);
+  /* SimpleCAD. */
+  layout.op("CAD_OT_workspace_add", IFACE_("CAD"), ICON_MESH_CUBE);
 
   ListBaseT<LinkData> templates;
   BKE_appdir_app_templates(&templates);

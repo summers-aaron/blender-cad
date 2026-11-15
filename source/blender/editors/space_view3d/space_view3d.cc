@@ -49,6 +49,7 @@
 #include "BKE_viewer_path.hh"
 
 #include "ED_asset_shelf.hh"
+#include "ED_cad.hh"
 #include "ED_geometry.hh"
 #include "ED_info.hh"
 #include "ED_object.hh"
@@ -219,6 +220,9 @@ static SpaceLink *view3d_create(const ScrArea * /*area*/, const Scene *scene)
   region->regiontype = RGN_TYPE_TOOL_HEADER;
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
   region->flag = RGN_FLAG_HIDDEN | RGN_FLAG_HIDDEN_BY_USER;
+
+  /* SimpleCAD: feature history, along the bottom (shown in CAD workspaces only). */
+  ed::cad::history_region_add(&v3d->regionbase);
 
   /* asset shelf */
   region = BKE_area_region_new();
@@ -1803,6 +1807,11 @@ void ED_spacetype_view3d()
   art->context = asset::shelf::context;
   BLI_addhead(&st->regiontypes, art);
   asset::shelf::types_register(art, SPACE_VIEW3D);
+
+  /* regions: SimpleCAD feature history */
+  art = MEM_new_zeroed<ARegionType>("spacetype view3d cad history region");
+  ed::cad::history_region_type_init(art);
+  BLI_addhead(&st->regiontypes, art);
 
   /* regions: hud */
   art = ui::ED_area_type_hud(st->spaceid);

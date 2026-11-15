@@ -147,6 +147,8 @@ enum eWorkSpaceFlags : int {
   WORKSPACE_SYNC_SCENE_TIME = (1 << 3),
   /* Used to define playback scene playback range from strip content length. */
   WORKSPACE_USE_STRIP_SCENE_RANGE_FOR_PLAYBACK = (1 << 4),
+  /** SimpleCAD: 3D views show the CAD shell (feature history). High bit: fork-local. */
+  WORKSPACE_USE_CAD_UI = (1 << 16),
 };
 ENUM_OPERATORS(eWorkSpaceFlags)
 

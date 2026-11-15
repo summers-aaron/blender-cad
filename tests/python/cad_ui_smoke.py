@@ -181,6 +181,32 @@ def main():
     op_rna("object.cad_part_add")
     op_rna("wm.step_export")
 
+    # The History strip context menu, for every feature.
+    from bl_ui import space_view3d_cad
+    menu_context = SimpleNamespace(active_object=ob)
+    for feature in part.features:
+        part.features.active = feature
+        feature.suppress = not feature.suppress
+        for _ in range(2):
+            try:
+                space_view3d_cad.CAD_MT_history_context.draw(
+                    SimpleNamespace(layout=Layout([])), menu_context)
+            except Exception as ex:
+                failures.append("CAD_MT_history_context [%s]: %s: %s" % (feature.name, type(ex).__name__, ex))
+            feature.suppress = not feature.suppress
+
+    # CAD workspaces get a History strip (the 3D View footer) in every 3D View.
+    workspace = bpy.data.workspaces["Layout"]
+    workspace.use_cad_ui = True
+    if not workspace.use_cad_ui:
+        failures.append("use_cad_ui not set")
+    for screen in workspace.screens:
+        for area in screen.areas:
+            if area.type == 'VIEW_3D' and not any(r.type == 'FOOTER' for r in area.regions):
+                failures.append("no History strip region in a 3D View of %s" % screen.name)
+    workspace.use_cad_ui = False
+    print("ok: CAD workspace flag")
+
     if failures:
         for f in failures:
             print("FAIL:", f)

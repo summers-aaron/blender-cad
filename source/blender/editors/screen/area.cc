@@ -1662,11 +1662,11 @@ bool ED_region_is_overlap(const int spacetype, const int regiontype)
         const bTheme *theme = ui::theme::theme_get();
         return theme->space_view3d.header[3] != 255;
       }
+      /* SimpleCAD: the footer is the CAD History strip, an opaque region beside the viewport. */
       return ELEM(regiontype,
                   RGN_TYPE_TOOLS,
                   RGN_TYPE_UI,
                   RGN_TYPE_TOOL_PROPS,
-                  RGN_TYPE_FOOTER,
                   RGN_TYPE_TOOL_HEADER,
                   RGN_TYPE_ASSET_SHELF,
                   RGN_TYPE_ASSET_SHELF_HEADER);
@@ -1751,7 +1751,9 @@ static void region_rect_recursive(
     prefsizey = ED_area_headersize();
   }
   else if (region->regiontype == RGN_TYPE_FOOTER) {
-    prefsizey = ED_area_footersize();
+    /* SimpleCAD: footers taller than a header (the CAD History strip) keep their size. */
+    prefsizey = std::max(ED_area_footersize(),
+                         int(UI_SCALE_FAC * region->runtime->type->prefsizey));
   }
   else if (region->regiontype == RGN_TYPE_SCRUBBING) {
     prefsizey = 0.9f * ED_area_footersize();

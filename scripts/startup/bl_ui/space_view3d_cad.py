@@ -53,6 +53,35 @@ class VIEW3D_MT_cad_part(Menu):
         layout.operator("cad.feature_edit", text="Edit Active Feature")
 
 
+class CAD_MT_history_context(Menu):
+    bl_label = "Feature"
+
+    def draw(self, context):
+        layout = self.layout
+        part = _cad_part(context)
+        feature = part.features.active if part else None
+        if feature is None:
+            layout.label(text="No feature")
+            return
+        layout.operator("cad.feature_edit", text="Edit Sketch" if feature.type == 'SKETCH' else "Edit Feature",
+                        icon='PREFERENCES').feature_uid = feature.uid
+        layout.operator("cad.rollback_set", text="Roll Back Here", icon='TRIA_LEFT_BAR').action = 'ACTIVE'
+        layout.operator("cad.rollback_set", text="Roll to End", icon='TRIA_RIGHT_BAR').action = 'END'
+        props = layout.operator("cad.feature_suppress", text="Unsuppress" if feature.suppress else "Suppress",
+                                icon='HIDE_OFF' if feature.suppress else 'HIDE_ON')
+        props.feature_uid = feature.uid
+        props.action = 'TOGGLE'
+        layout.separator()
+        props = layout.operator("cad.feature_move", text="Move Earlier", icon='TRIA_LEFT')
+        props.feature_uid = feature.uid
+        props.direction = 'UP'
+        props = layout.operator("cad.feature_move", text="Move Later", icon='TRIA_RIGHT')
+        props.feature_uid = feature.uid
+        props.direction = 'DOWN'
+        layout.separator()
+        layout.operator("cad.feature_delete", text="Delete", icon='TRASH').feature_uid = feature.uid
+
+
 class VIEW3D_PT_cad_feature_dialog(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -257,6 +286,7 @@ class VIEW3D_PT_cad_sketch(Panel):
 
 classes = (
     VIEW3D_MT_cad_part,
+    CAD_MT_history_context,
     VIEW3D_PT_cad_feature_dialog,
     VIEW3D_PT_cad_feature_dialog_parameters,
     VIEW3D_MT_select_edit_cad,

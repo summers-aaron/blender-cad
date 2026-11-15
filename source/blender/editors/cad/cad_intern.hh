@@ -93,6 +93,10 @@ void CAD_OT_feature_edit(wmOperatorType *ot);
 void CAD_OT_dialog_ok(wmOperatorType *ot);
 void CAD_OT_dialog_cancel(wmOperatorType *ot);
 void dialog_gizmos_register();
+
+/* History strip and CAD workspaces (cad_history.cc). */
+void history_operatortypes();
+void history_keymap(wmKeyConfig *keyconf);
 /** "CAD Part": object mode keys of CAD parts (feature dialogs, new features). */
 void part_keymap(wmKeyConfig *keyconf);
 

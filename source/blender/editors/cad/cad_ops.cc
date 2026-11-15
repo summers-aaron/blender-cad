@@ -569,6 +569,7 @@ void operatortypes_cad()
   WM_operatortype_append(CAD_OT_feature_edit);
   WM_operatortype_append(CAD_OT_dialog_ok);
   WM_operatortype_append(CAD_OT_dialog_cancel);
+  history_operatortypes();
   WM_operatortype_append(CAD_OT_reference_toggle);
   WM_operatortype_append(CAD_OT_references_pick);
 
@@ -595,6 +596,7 @@ void keymap_cad(wmKeyConfig *keyconf)
 {
   sketch_keymap(keyconf);
   part_keymap(keyconf);
+  history_keymap(keyconf);
 }
 
 void gizmotypes_cad()

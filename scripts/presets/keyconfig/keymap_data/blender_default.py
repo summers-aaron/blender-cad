@@ -6217,6 +6217,30 @@ def km_cad_sketch(params):
     return keymap
 
 
+# Feature history strip of CAD workspaces (SimpleCAD).
+def km_cad_history(_params):
+    items = []
+    keymap = (
+        "CAD History",
+        {"space_type": 'VIEW_3D', "region_type": 'FOOTER'},
+        {"items": items},
+    )
+
+    items.extend([
+        ("cad.history_edit", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
+        ("cad.history_select", {"type": 'LEFTMOUSE', "value": 'CLICK'}, None),
+        ("cad.history_rollback_drag", {"type": 'LEFTMOUSE', "value": 'CLICK_DRAG'}, None),
+        ("cad.history_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
+        ("cad.history_scroll", {"type": 'WHEELDOWNMOUSE', "value": 'PRESS'},
+         {"properties": [("delta", 1)]}),
+        ("cad.history_scroll", {"type": 'WHEELUPMOUSE', "value": 'PRESS'},
+         {"properties": [("delta", -1)]}),
+        ("cad.history_hover", {"type": 'MOUSEMOVE', "value": 'ANY'}, None),
+    ])
+
+    return keymap
+
+
 # CAD parts in object mode (SimpleCAD): feature dialogs and new features.
 def km_cad_part(_params):
     items = []
@@ -9260,6 +9284,7 @@ def generate_keymaps(params=None):
         km_edit_pointcloud(params),
         km_cad_sketch(params),
         km_cad_part(params),
+        km_cad_history(params),
 
         # Modal maps.
         km_eyedropper_modal_map(params),
